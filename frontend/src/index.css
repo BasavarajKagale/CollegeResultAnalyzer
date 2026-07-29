@@ -1,0 +1,298 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --primary: #D4AF37; /* Classical Gold */
+  --secondary: #001f3f; /* Deep Navy */
+  --accent: #FFFFFF;
+  --bg-dark: #0a0a0a;
+  --bg-light: #F8F9FA;
+  --text-dark: #1a1a1a;
+  --text-light: #f4f4f4;
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  --transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-light);
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Playfair Display', serif;
+  letter-spacing: -0.02em;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Glassmorphism Card */
+.card {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  border-color: var(--primary);
+}
+
+/* Buttons */
+.btn {
+  padding: 0.8rem 2rem;
+  border-radius: 50px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #B8860B);
+  color: #000;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+}
+
+.btn-primary:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.btn-secondary:hover {
+  background: var(--primary);
+  color: #000;
+}
+
+/* Landing Page Styles */
+.hero {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+}
+
+.hero-content {
+  z-index: 10;
+  max-width: 800px;
+  animation: fadeIn 1.5s ease-out;
+}
+
+.hero-title {
+  font-size: 4.5rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(to right, #fff, var(--primary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+  font-size: 1.5rem;
+  color: #aaa;
+  margin-bottom: 2.5rem;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Navbar Premium */
+.navbar {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 1.2rem 4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-link {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: var(--transition);
+  position: relative;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--primary);
+  transition: var(--transition);
+}
+
+.nav-link:hover::after, .nav-link.active::after {
+  width: 100%;
+}
+
+/* Data Tables */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+  margin-top: 2rem;
+}
+
+th {
+  background: transparent;
+  color: var(--primary);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  padding: 1rem;
+  letter-spacing: 1px;
+}
+
+td {
+  background: var(--glass);
+  padding: 1.2rem 1rem;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+td:first-child { border-left: 1px solid var(--glass-border); border-radius: 12px 0 0 12px; }
+td:last-child { border-right: 1px solid var(--glass-border); border-radius: 0 12px 12px 0; }
+
+/* Reveal Animation */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.8s ease-out;
+}
+
+.reveal.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.features-section {
+  padding: 8rem 2rem;
+  background: #000;
+  position: relative;
+  z-index: 10;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  margin-top: 4rem;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 3rem 2rem;
+  border-radius: 24px;
+  text-align: center;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card:hover {
+  background: rgba(212, 175, 55, 0.05);
+  border-color: var(--primary);
+  transform: translateY(-15px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.feature-icon-wrapper {
+  width: 80px;
+  height: 80px;
+  background: rgba(212, 175, 55, 0.1);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 2rem;
+  color: var(--primary);
+  transition: var(--transition);
+}
+
+.feature-card:hover .feature-icon-wrapper {
+  background: var(--primary);
+  color: #000;
+  transform: rotate(10deg);
+}
+
+.designer-link {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  position: relative;
+  transition: var(--transition);
+}
+
+.designer-link::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: -2px;
+  left: 0;
+  background-color: var(--primary);
+  transition: all 0.3s ease-in-out;
+}
+
+.designer-link:hover::after {
+  width: 100%;
+}
+
+

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: result-analyzer-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGODB_URI
+        sync: false # Requires manual entry in the Render dashboard
+
+  - type: static
+    name: result-analyzer-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: result-analyzer-backend
+          envVarKey: RENDER_EXTERNAL_URL
