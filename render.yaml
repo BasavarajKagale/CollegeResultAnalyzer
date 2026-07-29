@@ -9,7 +9,7 @@ services:
       - key: MONGODB_URI
         sync: false # Requires manual entry in the Render dashboard
 
-  - type: static
+  - type: web
     name: result-analyzer-frontend
     env: static
     rootDir: frontend
