@@ -93,7 +93,6 @@ This project is fully configured for automated deployment on [Render](https://re
 </div>
 
 <div align="center">
-  <i>Developed with ❤️ for educators and academic institutions.</i>
   <b>https://collegeresultanalyzer-1.onrender.com</b>
 </div>
 
