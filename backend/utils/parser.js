@@ -13,6 +13,37 @@ const EXCLUDED_HEADERS = [
 ];
 
 /**
+ * Format raw subject headers to "Subject Title (Subject Code)" format
+ */
+function formatSubjectHeader(rawHeader) {
+    if (!rawHeader) return rawHeader;
+    let clean = String(rawHeader).replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Already in Title (Code) format
+    if (/^.+\s+\([A-Z0-9]{3,8}\)$/i.test(clean)) {
+        return clean;
+    }
+
+    // Matches "BCS701 Internet of Things" or "21CS31 Mathematics" or "BCS714A Deep Learning"
+    const codeFirstMatch = clean.match(/^([A-Z]{2,4}\d{3,4}[A-Z]?|\d{2}[A-Z]{2,4}\d{2,4}[A-Z]?)\s+(.+)$/i);
+    if (codeFirstMatch) {
+        const code = codeFirstMatch[1].toUpperCase();
+        const title = codeFirstMatch[2].trim();
+        return `${title} (${code})`;
+    }
+
+    // Matches "Internet of Things BCS701"
+    const codeLastMatch = clean.match(/^(.+)\s+([A-Z]{2,4}\d{3,4}[A-Z]?|\d{2}[A-Z]{2,4}\d{2,4}[A-Z]?)$/i);
+    if (codeLastMatch) {
+        const title = codeLastMatch[1].trim();
+        const code = codeLastMatch[2].toUpperCase();
+        return `${title} (${code})`;
+    }
+
+    return clean;
+}
+
+/**
  * Universal Entry Point to parse PDF, Excel, and CSV files
  */
 async function parseResultFile(buffer, originalname = '', mimetype = '') {
@@ -47,7 +78,7 @@ function parseSpreadsheetBuffer(buffer) {
 }
 
 /**
- * Core Matrix Parsing Engine
+ * Core Matrix Parsing Engine for Excel & CSV
  */
 function parseMatrix(matrix) {
     // 1. Clean matrix values
@@ -165,7 +196,7 @@ function parseMatrix(matrix) {
         if (cleanedHeader.length > 0) {
             subjectCols.push({
                 index: colIdx,
-                name: cleanedHeader
+                name: formatSubjectHeader(cleanedHeader)
             });
         }
     });
@@ -217,6 +248,47 @@ function parseMatrix(matrix) {
 }
 
 /**
+ * Extract Subject Codes and Names from PDF Header Text
+ */
+function extractSubjectsFromPDFHeader(headerText, expectedCount) {
+    const codeRegex = /\b([A-Z]{2,4}\d{3,4}[A-Z]?|\d{2}[A-Z]{2,4}\d{2,4}[A-Z]?)\b/gi;
+    const matches = [];
+    let match;
+
+    while ((match = codeRegex.exec(headerText)) !== null) {
+        const code = match[1].toUpperCase();
+        // Skip if code looks like a USN pattern (e.g., 2KD23CS018 or 1AB23CS001)
+        if (!/\b[0-9][A-Z]{2}[0-9]{2}[A-Z]{2,3}[0-9]{3}\b/i.test(code)) {
+            matches.push({
+                code: code,
+                index: match.index,
+                length: match[0].length
+            });
+        }
+    }
+
+    if (matches.length === 0) return [];
+
+    const subjects = [];
+    for (let i = 0; i < matches.length; i++) {
+        const curr = matches[i];
+        const nextIndex = (i + 1 < matches.length) ? matches[i + 1].index : headerText.length;
+        
+        let titleChunk = headerText.slice(curr.index + curr.length, nextIndex).trim();
+        titleChunk = titleChunk.replace(/\b(Name|USN|Sl\.?\s*No|Total|Percentage|Status|Result|Rank)\b/gi, '').trim();
+        titleChunk = titleChunk.replace(/\s+/g, ' ');
+
+        if (titleChunk && titleChunk.length > 1) {
+            subjects.push(`${titleChunk} (${curr.code})`);
+        } else {
+            subjects.push(curr.code);
+        }
+    }
+
+    return subjects.slice(0, expectedCount);
+}
+
+/**
  * PDF Parsing Engine using pdf-parse text extraction
  */
 async function parsePDFBuffer(buffer) {
@@ -226,22 +298,18 @@ async function parsePDFBuffer(buffer) {
 
     const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-    // 1. Detect Subject Headers from PDF lines
-    const headerLines = [];
-    lines.forEach(line => {
-        if (/21CS\d+|18CS\d+|Mathematics|Data Structures|Digital Design|Operating Systems|Computer Networks|Database/i.test(line) &&
-            !VTU_USN_REGEX.test(line)) {
-            headerLines.push(line);
-        }
-    });
-
-    // 2. Parse Student Lines with USNs
+    // 1. Locate student records and determine first student line
     const rawStudents = [];
     let detectedSubjectCount = 0;
+    let firstStudentLineIdx = -1;
 
-    lines.forEach((line) => {
+    lines.forEach((line, lineIdx) => {
         const usnMatch = line.match(VTU_USN_REGEX) || line.match(GENERIC_USN_REGEX);
         if (usnMatch) {
+            if (firstStudentLineIdx === -1) {
+                firstStudentLineIdx = lineIdx;
+            }
+
             const usn = usnMatch[1].toUpperCase();
             const idx = line.indexOf(usnMatch[0]);
 
@@ -262,16 +330,18 @@ async function parsePDFBuffer(buffer) {
         }
     });
 
-    // Generate subject names if not extracted
-    let subjectNames = [];
-    if (headerLines.length > 0) {
-        const combined = headerLines.join(' ');
-        const codeMatches = combined.match(/\b\d{2}[A-Za-z]{2,3}\d{2,3}[^\d]*/g) || [];
-        if (codeMatches.length >= detectedSubjectCount) {
-            subjectNames = codeMatches.slice(0, detectedSubjectCount).map(s => s.trim());
-        }
+    if (rawStudents.length === 0) {
+        throw new Error('No valid student records detected in the PDF.');
     }
 
+    // 2. Extract Subject Headers from lines before first student record
+    const headerText = lines.slice(0, firstStudentLineIdx !== -1 ? firstStudentLineIdx : 10).join(' ');
+    let subjectNames = extractSubjectsFromPDFHeader(headerText, detectedSubjectCount);
+
+    // Format all subjects to "Title (Code)" format
+    subjectNames = subjectNames.map(formatSubjectHeader);
+
+    // Fallback if extracted count is less than detectedSubjectCount
     if (subjectNames.length < detectedSubjectCount) {
         for (let i = subjectNames.length; i < detectedSubjectCount; i++) {
             subjectNames.push(`Subject ${i + 1}`);
@@ -324,7 +394,7 @@ function buildResultDocument(rawStudents, subjectNames) {
             studentTotal += mark;
 
             const stat = subjectStatsMap[sub];
-            if (mark >= 40) {
+            if (mark >= 35) { // Standard passing threshold
                 stat.passCount++;
             } else {
                 stat.failCount++;
