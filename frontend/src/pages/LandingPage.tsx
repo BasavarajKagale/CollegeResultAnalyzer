@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, GraduationCap, Zap, BarChart3, PieChart as PieIcon, FileDown, ShieldCheck } from 'lucide-react';
+import Footer from '../components/Footer';
 
 // --- Simple Perlin Noise Implementation (Self-contained) ---
 const dot = (g: number[], x: number, y: number, z: number) => g[0] * x + g[1] * y + g[2] * z;
@@ -232,21 +233,7 @@ const LandingPage = () => {
                     </div>
                 </section>
                 
-                <footer style={{ padding: '3rem 2rem 10px', textAlign: 'center', background: 'transparent' }}>
-                    <div style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.3rem' }}>KLECET</div>
-                    <div style={{ opacity: 0.4, fontSize: '0.7rem', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '2rem' }}>
-                        ESTABLISHED 2008 • CHIKODI, KARNATAKA
-                    </div>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        <p style={{ opacity: 0.5, fontSize: '0.8rem' }}>
-                            © 2026 KLECET Chikodi. All Rights Reserved.
-                        </p>
-                        <p style={{ fontSize: '0.9rem', color: '#aaa' }}>
-                            Designed & Developed by <button onClick={() => navigate('/admin/login')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit' }} className="designer-link">Basavaraj Kagale</button>
-                        </p>
-                    </div>
-                </footer>
+                <Footer />
             </div>
         </div>
     );

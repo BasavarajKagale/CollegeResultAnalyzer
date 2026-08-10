@@ -394,4 +394,13 @@ td:last-child { border-right: 1px solid var(--glass-border); border-radius: 0 12
   }
 }
 
+/* Circular Animated Social Media Icons */
+.social-icon-btn:hover {
+  transform: translateY(-4px) scale(1.22) rotate(10deg);
+  background: rgba(212, 175, 55, 0.15) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+}
+
 
