@@ -23,6 +23,11 @@ const Navbar = () => {
                 <Link to="/results" className={`nav-link ${location.pathname === '/results' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <List size={18} /> Results
                 </Link>
+                {localStorage.getItem('adminToken') === 'true' && (
+                    <Link to="/admin" className={`nav-link ${location.pathname.startsWith('/admin') ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                        Admin Portal
+                    </Link>
+                )}
                 {location.pathname !== '/' && (
                     <button 
                         onClick={() => navigate(-1)} 

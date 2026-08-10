@@ -162,10 +162,47 @@ const exportPDF = async (req, res) => {
     }
 };
 
+const deleteResult = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await Result.findByIdAndDelete(id);
+        if (!result) {
+            return res.status(404).json({ error: 'Result record not found' });
+        }
+        await Student.deleteMany({ resultId: id });
+        res.json({ message: 'Result file and all candidate records deleted permanently' });
+    } catch (err) {
+        console.error('Delete Result Error:', err);
+        res.status(500).json({ error: 'Server error deleting result file' });
+    }
+};
+
+const adminLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (email === 'basavaraj@kle.com' && password === 'Bk2004@kle') {
+            return res.json({
+                success: true,
+                message: 'Admin authenticated successfully',
+                admin: {
+                    name: 'Basavaraj Kagale',
+                    email: 'basavaraj@kle.com',
+                    role: 'admin'
+                }
+            });
+        }
+        return res.status(401).json({ error: 'Invalid admin email or password' });
+    } catch (err) {
+        res.status(500).json({ error: 'Server error during authentication' });
+    }
+};
+
 module.exports = {
     uploadResult,
     getResults,
     getResultById,
     exportExcel,
-    exportPDF
+    exportPDF,
+    deleteResult,
+    adminLogin
 };

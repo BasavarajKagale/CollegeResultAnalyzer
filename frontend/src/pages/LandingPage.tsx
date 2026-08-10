@@ -243,7 +243,7 @@ const LandingPage = () => {
                             © 2026 KLECET Chikodi. All Rights Reserved.
                         </p>
                         <p style={{ fontSize: '0.9rem', color: '#aaa' }}>
-                            Designed & Developed by <a href="https://www.linkedin.com/in/basavaraj-kagale-5b91b3278/" target="_blank" rel="noopener noreferrer" className="designer-link">Basavaraj Kagale</a>
+                            Designed & Developed by <button onClick={() => navigate('/admin/login')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit' }} className="designer-link">Basavaraj Kagale</button>
                         </p>
                     </div>
                 </footer>

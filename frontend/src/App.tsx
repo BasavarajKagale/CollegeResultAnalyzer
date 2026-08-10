@@ -5,6 +5,8 @@ import UploadPage from './pages/UploadPage';
 import ResultsList from './pages/ResultsList';
 import Dashboard from './pages/Dashboard';
 import ResultDetails from './pages/ResultDetails';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 import './index.css';
 
 function App() {
@@ -18,6 +20,8 @@ function App() {
           <Route path="/results" element={<div className="container"><ResultsList /></div>} />
           <Route path="/results/:id" element={<div className="container"><ResultDetails /></div>} />
           <Route path="/dashboard/:id" element={<div className="container"><Dashboard /></div>} />
+          <Route path="/admin/login" element={<div className="container"><AdminLogin /></div>} />
+          <Route path="/admin" element={<div className="container"><AdminDashboard /></div>} />
         </Routes>
       </div>
     </Router>
