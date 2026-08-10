@@ -167,44 +167,44 @@ const ResultDetails = () => {
             </div>
 
             {/* Detailed Candidate Table */}
-            <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
-                <div style={{ padding: '1.8rem 2rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ fontSize: '1.5rem' }}>Detailed Candidate Record</h3>
+            <div className="card" style={{ padding: '0', overflow: 'hidden', width: '100%' }}>
+                <div style={{ padding: '1.5rem 1.5rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem' }}>
+                    <h3 style={{ fontSize: '1.4rem' }}>Detailed Candidate Record</h3>
                     <span style={{ fontSize: '0.75rem', color: '#888' }}>Click subject column headers for subject report</span>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ margin: '0', width: '100%', borderSpacing: '0' }}>
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                    <table style={{ margin: '0', width: '100%', borderSpacing: '0', fontSize: '0.85rem' }}>
                         <thead>
                             <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                                <th style={{ paddingLeft: '2rem', textAlign: 'center', width: '60px' }}>Rank</th>
-                                <th>USN</th>
-                                <th>Name</th>
+                                <th style={{ paddingLeft: '1rem', paddingRight: '0.5rem', textAlign: 'center', width: '50px' }}>Rank</th>
+                                <th style={{ padding: '0.6rem 0.5rem' }}>USN</th>
+                                <th style={{ padding: '0.6rem 0.5rem' }}>Name</th>
                                 {result.subjects.map((s: any) => (
                                     <th 
                                         key={s.name} 
                                         onClick={() => setSelectedSubject(s.name)}
                                         className="subject-badge"
                                         title={`Click for ${s.name} Subject Dashboard`}
-                                        style={{ textAlign: 'center', cursor: 'pointer' }}
+                                        style={{ textAlign: 'center', cursor: 'pointer', padding: '0.6rem 0.4rem', fontSize: '0.75rem' }}
                                     >
                                         {s.name}
                                     </th>
                                 ))}
-                                <th style={{ textAlign: 'center' }}>Total</th>
-                                <th style={{ textAlign: 'center' }}>Percentage</th>
-                                <th style={{ paddingRight: '2rem', textAlign: 'center' }}>Status</th>
+                                <th style={{ textAlign: 'center', padding: '0.6rem 0.5rem' }}>Total</th>
+                                <th style={{ textAlign: 'center', padding: '0.6rem 0.5rem' }}>%</th>
+                                <th style={{ paddingRight: '1rem', paddingLeft: '0.5rem', textAlign: 'center' }}>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             {students.map((s: any, idx: number) => (
                                 <tr key={s._id || `${s.usn}-${idx}`}>
-                                    <td style={{ paddingLeft: '2rem', textAlign: 'center', background: 'transparent' }}>
+                                    <td style={{ paddingLeft: '1rem', paddingRight: '0.5rem', textAlign: 'center', background: 'transparent' }}>
                                         <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{s.rank}</span>
                                     </td>
-                                    <td className="nowrap" style={{ fontSize: '0.85rem', opacity: 0.85 }}>{s.usn}</td>
-                                    <td className="nowrap" style={{ fontWeight: 600 }}>{s.name}</td>
+                                    <td className="nowrap" style={{ fontSize: '0.8rem', opacity: 0.85, padding: '0.6rem 0.5rem' }}>{s.usn}</td>
+                                    <td className="nowrap" style={{ fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.name}</td>
                                     {result.subjects.map((sub: any) => (
-                                        <td key={sub.name} style={{ textAlign: 'center' }}>
+                                        <td key={sub.name} style={{ textAlign: 'center', padding: '0.6rem 0.4rem' }}>
                                             <span style={{ 
                                                 color: s.marks[sub.name] < 35 ? '#ff4d4d' : '#fff',
                                                 fontWeight: s.marks[sub.name] < 35 ? 700 : 400
@@ -213,13 +213,13 @@ const ResultDetails = () => {
                                             </span>
                                         </td>
                                     ))}
-                                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)' }}>{s.totalMarks}</td>
-                                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{s.percentage}%</td>
-                                    <td style={{ paddingRight: '2rem', textAlign: 'center' }}>
+                                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '0.6rem 0.5rem' }}>{s.totalMarks}</td>
+                                    <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
+                                    <td style={{ paddingRight: '1rem', paddingLeft: '0.5rem', textAlign: 'center' }}>
                                         <span style={{ 
-                                            padding: '4px 12px', 
+                                            padding: '3px 10px', 
                                             borderRadius: '20px', 
-                                            fontSize: '0.7rem', 
+                                            fontSize: '0.65rem', 
                                             fontWeight: 700,
                                             background: s.isPass ? 'rgba(40, 167, 69, 0.15)' : 'rgba(220, 53, 69, 0.15)',
                                             color: s.isPass ? '#28a745' : '#dc3545'

@@ -60,7 +60,7 @@ const Dashboard = () => {
 
     const { result, students = [] } = data;
 
-    // Export Charts to PDF function
+    // Export Charts to PDF function (Multi-page A4 rendering without cutoff)
     const downloadChartsPDF = async () => {
         if (!dashboardRef.current) return;
         setExportingPDF(true);
@@ -73,10 +73,29 @@ const Dashboard = () => {
 
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            const pageWidth = pdf.internal.pageSize.getWidth(); // ~210 mm
+            const pageHeight = pdf.internal.pageSize.getHeight(); // ~297 mm
+            
+            const margin = 5; // 5mm margin
+            const imgWidth = pageWidth - (margin * 2);
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            
+            let heightLeft = imgHeight;
+            let position = margin;
 
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            // Page 1
+            pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+            heightLeft -= (pageHeight - margin * 2);
+
+            // Add extra pages if canvas height exceeds 1 page
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight + margin;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+                heightLeft -= (pageHeight - margin * 2);
+            }
+
             pdf.save(`Charts_Analytics_${result.filename}.pdf`);
         } catch (err) {
             console.error('PDF Export Error:', err);

@@ -34,9 +34,37 @@ h1, h2, h3, h4 {
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 98%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1.5rem 1%;
+}
+
+/* Custom Slim Dark & Gold Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.35);
+  border-radius: 10px;
+  transition: var(--transition);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.6);
+}
+
+/* Firefox Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 175, 55, 0.35) rgba(0, 0, 0, 0.4);
 }
 
 /* Glassmorphism Card */
