@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Trophy, AlertTriangle, Users, BookOpen, CheckCircle, XCircle } from 'lucide-react';
+import { X, Trophy, AlertTriangle, Users, BookOpen, CheckCircle } from 'lucide-react';
 
 interface SubjectModalProps {
     subjectName: string;
@@ -18,7 +18,8 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
             usn: s.usn,
             mark: mark,
             isPass: mark >= 35, // Passing mark threshold
-            overallRank: s.rank
+            overallRank: s.rank,
+            subjectRank: 0
         };
     });
 
@@ -89,8 +90,8 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                     </div>
 
                     <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#aaa', textTransform: 'uppercase', fontWeight 700 }}>Lowest Score</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight 800, color: '#ff4d4d', margin: '0.2rem 0' }}>{lowestMark}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#aaa', textTransform: 'uppercase', fontWeight: 700 }}>Lowest Score</div>
+                        <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ff4d4d', margin: '0.2rem 0' }}>{lowestMark}</div>
                         <div style={{ fontSize: '0.75rem', color: '#aaa' }}>Min Marks</div>
                     </div>
                 </div>
