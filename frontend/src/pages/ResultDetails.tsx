@@ -74,8 +74,8 @@ const ResultDetails = () => {
                         <Trophy size={24} /> Academic Toppers
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {result.toppers.map((t: any) => (
-                            <div key={t.usn} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px' }}>
+                        {result.toppers.map((t: any, idx: number) => (
+                            <div key={t._id || `${t.usn}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                     <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)', width: '30px' }}>#{t.rank}</span>
                                     <div>
@@ -114,8 +114,8 @@ const ResultDetails = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {students.map((s: any) => (
-                                <tr key={s.usn}>
+                            {students.map((s: any, idx: number) => (
+                                <tr key={s._id || `${s.usn}-${idx}`}>
                                     <td style={{ paddingLeft: '2rem', background: 'transparent' }}>
                                         <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{s.rank}</span>
                                     </td>

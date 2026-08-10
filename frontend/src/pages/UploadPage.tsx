@@ -33,7 +33,7 @@ const UploadPage = () => {
             });
             navigate(`/results/${res.data._id}`);
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Upload failed. Please check the Excel format.');
+            setError(err.response?.data?.error || 'Upload failed. Please check the file format.');
         } finally {
             setLoading(false);
         }
@@ -43,7 +43,7 @@ const UploadPage = () => {
         <div className="card" style={{ maxWidth: '600px', margin: '4rem auto', textAlign: 'center' }}>
             <h2 className="title">Upload Results</h2>
             <p style={{ marginBottom: '2rem', color: '#aaa' }}>
-                Analyze your batch performance with precision.
+                Analyze batch performance seamlessly from PDF, Excel, or CSV formats.
             </p>
             
             <form onSubmit={handleUpload}>
@@ -59,7 +59,7 @@ const UploadPage = () => {
                 }}>
                     <input 
                         type="file" 
-                        accept=".xlsx" 
+                        accept=".xlsx, .xls, .csv, .pdf" 
                         onChange={handleFileChange}
                         style={{ 
                             position: 'absolute', 
@@ -75,7 +75,9 @@ const UploadPage = () => {
                         {file ? (
                             <><FileUp size={48} style={{ color: 'var(--primary)' }} /><p style={{ marginTop: '1rem', fontWeight: 600 }}>{file.name}</p></>
                         ) : (
-                            <><UploadIcon size={48} style={{ color: '#444' }} /><p style={{ marginTop: '1rem' }}>Click or drag Excel file here</p></>
+                            <><UploadIcon size={48} style={{ color: '#888' }} />
+                            <p style={{ marginTop: '1rem', fontWeight: 600 }}>Click or drag file here</p>
+                            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>Supports PDF (.pdf), Excel (.xlsx, .xls), or CSV (.csv)</p></>
                         )}
                     </div>
                 </div>

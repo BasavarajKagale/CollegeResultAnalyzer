@@ -1,110 +1,30 @@
 const Result = require('../models/Result');
 const Student = require('../models/Student');
-const xlsx = require('xlsx');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const { parseResultFile } = require('../utils/parser');
 
 const uploadResult = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-        if (data.length === 0) return res.status(400).json({ error: 'Excel file is empty' });
-
-        // Dynamic subject detection - excluding common fields
-        const keys = Object.keys(data[0]);
-        const subjects = keys.filter(k => 
-            !['usn', 'name', 'sl no', 'sl_no', 'slno', 'total', 'percentage', 'result', 'sgpa', 'cgpa'].includes(k.toLowerCase())
-        );
-
-        let studentDocs = [];
-        let totalPass = 0;
-        let subjectStats = subjects.map(s => ({
-            name: s,
-            passCount: 0,
-            failCount: 0,
-            passPercentage: 0,
-            highestMarks: 0
-        }));
-
-        data.forEach(row => {
-            let studentMarks = {};
-            let studentTotal = 0;
-            let isPass = true;
-
-            subjects.forEach(sub => {
-                const mark = parseInt(row[sub]) || 0;
-                studentMarks[sub] = mark;
-                studentTotal += mark;
-                
-                const stat = subjectStats.find(st => st.name === sub);
-                if (mark >= 40) {
-                    stat.passCount++;
-                } else {
-                    stat.failCount++;
-                    isPass = false;
-                }
-                if (mark > stat.highestMarks) stat.highestMarks = mark;
-            });
-
-            if (isPass) totalPass++;
-
-            const percentage = (studentTotal / (subjects.length * 100)) * 100;
-            
-            studentDocs.push({
-                name: row.Name || row.name || 'Unknown',
-                usn: row.USN || row.usn || 'N/A',
-                marks: studentMarks,
-                totalMarks: studentTotal,
-                percentage: parseFloat(percentage.toFixed(2)),
-                isPass: isPass
-            });
-        });
-
-        // Calculate rankings
-        studentDocs.sort((a, b) => b.totalMarks - a.totalMarks);
-        studentDocs.forEach((s, index) => s.rank = index + 1);
-
-        // Subject Analysis percentages
-        subjectStats.forEach(stat => {
-            stat.passPercentage = (stat.passCount / data.length) * 100;
-        });
-
-        // Toppers
-        const toppers = studentDocs.slice(0, 3).map(s => ({
-            rank: s.rank,
-            name: s.name,
-            usn: s.usn,
-            totalMarks: s.totalMarks,
-            percentage: s.percentage
-        }));
-
-        // Overall stats
-        const overallStats = {
-            totalStudents: data.length,
-            passCount: totalPass,
-            failCount: data.length - totalPass,
-            passPercentage: (totalPass / data.length) * 100
-        };
+        const parsed = await parseResultFile(req.file.buffer, req.file.originalname, req.file.mimetype);
 
         const result = new Result({
             filename: req.file.originalname,
-            subjects: subjectStats,
-            toppers: toppers,
-            overallStats: overallStats
+            subjects: parsed.subjects,
+            toppers: parsed.toppers,
+            overallStats: parsed.overallStats
         });
 
         const savedResult = await result.save();
         
-        await Student.insertMany(studentDocs.map(s => ({ ...s, resultId: savedResult._id })));
+        await Student.insertMany(parsed.studentDocs.map(s => ({ ...s, resultId: savedResult._id })));
 
         res.status(201).json(savedResult);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('File Processing Error:', err);
+        res.status(500).json({ error: err.message || 'Server error processing result file' });
     }
 };
 

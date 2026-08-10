@@ -17,25 +17,27 @@
 
 ## 🌟 Overview
 
-The **College Result Analyzer** is a full-stack web application designed to simplify the complex task of processing student results. It takes raw result data (like Excel spreadsheets), parses it securely in the backend, and provides a beautiful, interactive dashboard filled with insightful metrics, subject-wise performance graphs, and academic toppers.
+The **College Result Analyzer** is a full-stack web application designed to simplify the complex task of processing student results. It accepts raw result documents in **PDF (.pdf)**, **Excel (.xlsx, .xls)**, or **CSV (.csv)** formats, parses them securely in the backend using an intelligent pattern-recognition engine, and provides an interactive dashboard filled with insightful metrics, subject-wise performance analytics, and academic toppers.
 
 ## 🚀 Features
 
+- 📑 **Universal Multi-Format Support:** Seamlessly process PDF (.pdf), Excel (.xlsx, .xls), and CSV (.csv) result files.
+- 🧠 **Smart Header & USN Detection:** Automatically skips top title banners/subheaders, merges multiline subheaders, and extracts USNs (e.g. `2KD23CS018`) and student names using intelligent regex pattern recognition.
 - 📊 **Interactive Dashboards:** Visualize pass/fail percentages, batch summaries, and overall academic health using interactive charts.
-- 🏆 **Toppers List:** Automatically identifies and lists the top-performing students in the batch.
+- 🏆 **Toppers List:** Automatically identifies and ranks top-performing students in the batch.
 - 📄 **Export Reports:** Generate and download comprehensive reports in both **Excel (.xlsx)** and **PDF** formats with a single click.
 - 📈 **Detailed Candidate Records:** View subject-wise marks and status for every individual candidate in an easy-to-read tabular format.
 - 🎨 **Modern UI:** Built with Vite and React for a lightning-fast, premium user experience.
 
 ## 🛠️ Technology Stack
 
-| Frontend                | Backend                | Database      |
-|-------------------------|------------------------|---------------|
-| React 19                | Node.js                | MongoDB       |
-| Vite                    | Express.js             | Mongoose      |
-| Chart.js & React-Chartjs| ExcelJS (Parsing/Export)|              |
-| Lucide React (Icons)    | PDFKit (PDF Generation)|               |
-| Typescript              | Multer (File Uploads)  |               |
+| Frontend                | Backend                           | Database      |
+|-------------------------|-----------------------------------|---------------|
+| React 19                | Node.js                           | MongoDB       |
+| Vite                    | Express.js                        | Mongoose      |
+| Chart.js & React-Chartjs| Universal Parsing (XLSX, pdf-parse)|              |
+| Lucide React (Icons)    | PDFKit (PDF Generation)           |               |
+| Typescript              | Multer (File Uploads)             |               |
 
 ## ⚙️ Getting Started (Local Development)
 
