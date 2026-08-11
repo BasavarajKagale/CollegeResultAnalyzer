@@ -26,7 +26,7 @@ function getAcademicClass(percentage, isPass) {
 /**
  * Fetch PNG chart image buffer from QuickChart API
  */
-function fetchChartImage(chartConfig, width = 500, height = 300) {
+function fetchChartImage(chartConfig, width = 600, height = 360) {
     return new Promise((resolve) => {
         try {
             const url = `https://quickchart.io/chart?w=${width}&h=${height}&bkg=white&f=png&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
@@ -95,6 +95,17 @@ async function generateResultPDF(result, students, res) {
         return false;
     }
 
+    // Helper: Ensure New Page without creating empty blank pages
+    function ensureNewPage(titleOnNewPage = '') {
+        if (currentY > margin + 20) {
+            doc.addPage();
+            currentY = margin;
+        }
+        if (titleOnNewPage) {
+            currentY = drawSectionHeader(titleOnNewPage, currentY);
+        }
+    }
+
     const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
     const passPct = stats.passPercentage || 0;
     const failPct = 100 - passPct;
@@ -110,6 +121,8 @@ async function generateResultPDF(result, students, res) {
         else passClass++;
     });
 
+    const totalStudentsCount = stats.totalStudents || students.length || 1;
+
     // Subject Averages
     const subjectAverages = subjects.map(sub => {
         let total = 0;
@@ -119,17 +132,26 @@ async function generateResultPDF(result, students, res) {
         return students.length > 0 ? parseFloat((total / students.length).toFixed(1)) : 0;
     });
 
-    // Fetch Chart Buffers in Parallel
+    // Fetch High-Res Chart Buffers with Crisp Legend Values and No Dark Inner Overlay Text
     const chart1Config = {
         type: 'doughnut',
         data: {
-            labels: [`Passed (${stats.passCount})`, `Failed (${stats.failCount})`],
-            datasets: [{ data: [stats.passCount, stats.failCount], backgroundColor: ['#16A34A', '#DC2626'] }]
+            labels: [
+                `Passed: ${stats.passCount || 0} (${passPct.toFixed(1)}%)`, 
+                `Failed: ${stats.failCount || 0} (${failPct.toFixed(1)}%)`
+            ],
+            datasets: [{ 
+                data: [stats.passCount || 0, stats.failCount || 0], 
+                backgroundColor: ['#16A34A', '#DC2626'],
+                borderColor: '#FFFFFF',
+                borderWidth: 2
+            }]
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Overall Result Distribution', font: { size: 14, weight: 'bold' } },
-                legend: { position: 'bottom' }
+                title: { display: true, text: 'Overall Result Distribution', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                datalabels: { display: false }
             }
         }
     };
@@ -137,13 +159,25 @@ async function generateResultPDF(result, students, res) {
     const chart2Config = {
         type: 'doughnut',
         data: {
-            labels: [`Distinction 75%+ (${distinction})`, `First Class 60-74% (${firstClass})`, `Second Class 50-59% (${secondClass})`, `Pass Class 35-49% (${passClass})`, `Failed (${failedCount})`],
-            datasets: [{ data: [distinction, firstClass, secondClass, passClass, failedCount], backgroundColor: ['#D97706', '#16A34A', '#2563EB', '#EAB308', '#DC2626'] }]
+            labels: [
+                `Distinction 75%+: ${distinction} (${((distinction/totalStudentsCount)*100).toFixed(1)}%)`,
+                `First Class 60-74%: ${firstClass} (${((firstClass/totalStudentsCount)*100).toFixed(1)}%)`,
+                `Second Class 50-59%: ${secondClass} (${((secondClass/totalStudentsCount)*100).toFixed(1)}%)`,
+                `Pass Class 35-49%: ${passClass} (${((passClass/totalStudentsCount)*100).toFixed(1)}%)`,
+                `Failed: ${failedCount} (${((failedCount/totalStudentsCount)*100).toFixed(1)}%)`
+            ],
+            datasets: [{ 
+                data: [distinction, firstClass, secondClass, passClass, failedCount], 
+                backgroundColor: ['#D97706', '#16A34A', '#2563EB', '#EAB308', '#DC2626'],
+                borderColor: '#FFFFFF',
+                borderWidth: 2
+            }]
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Performance Grade Breakdown', font: { size: 14, weight: 'bold' } },
-                legend: { position: 'bottom' }
+                title: { display: true, text: 'Performance Grade Breakdown', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                legend: { position: 'bottom', labels: { font: { size: 10, weight: 'bold' }, color: '#334155' } },
+                datalabels: { display: false }
             }
         }
     };
@@ -153,14 +187,19 @@ async function generateResultPDF(result, students, res) {
         data: {
             labels: subjects.map(s => getShortCode(s.name)),
             datasets: [
-                { label: 'Passed', data: subjects.map(s => s.passCount), backgroundColor: '#16A34A' },
-                { label: 'Failed', data: subjects.map(s => s.failCount), backgroundColor: '#DC2626' }
+                { label: 'Passed Candidates', data: subjects.map(s => s.passCount), backgroundColor: '#16A34A', borderRadius: 4 },
+                { label: 'Failed Candidates', data: subjects.map(s => s.failCount), backgroundColor: '#DC2626', borderRadius: 4 }
             ]
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Subject-Wise Pass vs Fail Comparison', font: { size: 14, weight: 'bold' } },
-                legend: { position: 'bottom' }
+                title: { display: true, text: 'Subject-Wise Pass vs Fail Comparison', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                datalabels: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
             }
         }
     };
@@ -170,23 +209,28 @@ async function generateResultPDF(result, students, res) {
         data: {
             labels: subjects.map(s => getShortCode(s.name)),
             datasets: [
-                { label: 'Highest Score', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3 },
-                { label: 'Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.3 }
+                { label: 'Peak Score in Subject', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3, pointRadius: 5 },
+                { label: 'Batch Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.3, pointRadius: 5 }
             ]
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Subject Benchmark: Peak Marks vs Average', font: { size: 14, weight: 'bold' } },
-                legend: { position: 'bottom' }
+                title: { display: true, text: 'Subject Benchmark: Peak Marks vs Average', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                datalabels: { display: false }
+            },
+            scales: {
+                y: { min: 0, max: 100, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 10 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
             }
         }
     };
 
     const [chart1Buf, chart2Buf, chart3Buf, chart4Buf] = await Promise.all([
-        fetchChartImage(chart1Config, 480, 280),
-        fetchChartImage(chart2Config, 480, 280),
-        fetchChartImage(chart3Config, 480, 280),
-        fetchChartImage(chart4Config, 480, 280)
+        fetchChartImage(chart1Config, 600, 360),
+        fetchChartImage(chart2Config, 600, 360),
+        fetchChartImage(chart3Config, 600, 360),
+        fetchChartImage(chart4Config, 600, 360)
     ]);
 
     // ==========================================
@@ -294,7 +338,7 @@ async function generateResultPDF(result, students, res) {
 
     currentY += 16;
 
-    // 3. Subject-Wise Analytics Table (Preserved exactly as requested in Pic 2)
+    // 3. Subject-Wise Analytics Table
     currentY = drawSectionHeader('3. Subject-Wise Analytics & Performance Breakdown', currentY);
 
     const subCols = [
@@ -365,10 +409,7 @@ async function generateResultPDF(result, students, res) {
     // ==========================================
     // PAGE 2: VISUAL ANALYTICS & CHARTS DOSSIER
     // ==========================================
-    doc.addPage();
-    currentY = margin;
-
-    currentY = drawSectionHeader('4. Visual Analytics & Graphical Benchmarks', currentY);
+    ensureNewPage('4. Visual Analytics & Graphical Benchmarks');
 
     const chartW = (contentWidth - 15) / 2; // ~250 pt
     const chartH = 160;
@@ -386,10 +427,7 @@ async function generateResultPDF(result, students, res) {
     // ==========================================
     // PAGE 3: TOP 5 PERFORMERS PER SUBJECT
     // ==========================================
-    doc.addPage();
-    currentY = margin;
-
-    currentY = drawSectionHeader('5. Subject-Wise Academic Toppers (Top 5 per Subject)', currentY);
+    ensureNewPage('5. Subject-Wise Academic Toppers (Top 5 per Subject)');
 
     const subTopCols = [
         { name: 'Rank', width: 35, align: 'center' },
@@ -429,24 +467,19 @@ async function generateResultPDF(result, students, res) {
 
             let rx = margin;
 
-            // Rank Badge
             doc.fillColor('#2563EB').fontSize(7.5).font('Helvetica-Bold').text(`#${idx + 1}`, rx + 4, currentY + 4, { width: subTopCols[0].width - 8, align: 'center' });
             rx += subTopCols[0].width;
 
-            // USN
             doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(st.usn || '-', rx + 4, currentY + 4, { width: subTopCols[1].width - 8 });
             rx += subTopCols[1].width;
 
-            // Name
             doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((st.name || '-').substring(0, 35), rx + 4, currentY + 4, { width: subTopCols[2].width - 8 });
             rx += subTopCols[2].width;
 
-            // Subject Marks
             const markVal = Number(st.marks[sub.name]) || 0;
             doc.fillColor('#1E40AF').fontSize(8).font('Helvetica-Bold').text(`${markVal}`, rx + 4, currentY + 4, { width: subTopCols[3].width - 8, align: 'center' });
             rx += subTopCols[3].width;
 
-            // Status Badge
             const isSubPass = markVal >= 35;
             doc.fillColor(isSubPass ? '#15803D' : '#B91C1C').fontSize(7.5).font('Helvetica-Bold').text(isSubPass ? 'PASS' : 'FAIL', rx + 4, currentY + 4, { width: subTopCols[4].width - 8, align: 'center' });
 
@@ -459,10 +492,7 @@ async function generateResultPDF(result, students, res) {
     // ==========================================
     // PAGE 4: SUBJECT-WISE FAILED CANDIDATES BREAKDOWN
     // ==========================================
-    doc.addPage();
-    currentY = margin;
-
-    currentY = drawSectionHeader('6. Subject-Wise Failure Directory & Backlog Breakdown', currentY);
+    ensureNewPage('6. Subject-Wise Failure Directory & Backlog Breakdown');
 
     const failCols = [
         { name: 'S.No', width: 35, align: 'center' },
@@ -477,7 +507,6 @@ async function generateResultPDF(result, students, res) {
 
         checkPageBreak(80, '6. Subject-Wise Failure Directory (Continued)');
 
-        // Subject Header Banner
         const hasFailures = failedInSub.length > 0;
         const subBannerBg = hasFailures ? '#7F1D1D' : '#14532D';
         doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill(subBannerBg);
@@ -491,7 +520,6 @@ async function generateResultPDF(result, students, res) {
             doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('✔ All evaluated candidates successfully passed this subject.', margin + 12, currentY + 6);
             currentY += 28;
         } else {
-            // Subtable Header
             doc.rect(margin, currentY, contentWidth, 16).fill('#991B1B');
             let ftx = margin;
             failCols.forEach(col => {
@@ -509,24 +537,19 @@ async function generateResultPDF(result, students, res) {
 
                 let rx = margin;
 
-                // S.No
                 doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text(`${idx + 1}`, rx + 4, currentY + 4, { width: failCols[0].width - 8, align: 'center' });
                 rx += failCols[0].width;
 
-                // USN
                 doc.fillColor('#7F1D1D').fontSize(7.5).font('Helvetica-Bold').text(st.usn || '-', rx + 4, currentY + 4, { width: failCols[1].width - 8 });
                 rx += failCols[1].width;
 
-                // Name
                 doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((st.name || '-').substring(0, 35), rx + 4, currentY + 4, { width: failCols[2].width - 8 });
                 rx += failCols[2].width;
 
-                // Marks
                 const markVal = Number(st.marks[sub.name]) || 0;
                 doc.fillColor('#DC2626').fontSize(8).font('Helvetica-Bold').text(`${markVal} / 100`, rx + 4, currentY + 4, { width: failCols[3].width - 8, align: 'center' });
                 rx += failCols[3].width;
 
-                // Status
                 doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text('FAIL', rx + 4, currentY + 4, { width: failCols[4].width - 8, align: 'center' });
 
                 currentY += 18;
@@ -537,16 +560,11 @@ async function generateResultPDF(result, students, res) {
     });
 
     // ==========================================
-    // ENDORSEMENT SIGNATURE BLOCK (Last Page)
+    // SECTION 7: ENDORSEMENT SIGNATURE BLOCK (Last Page)
     // ==========================================
     checkPageBreak(85);
 
-    currentY += 10;
-    doc.rect(margin, currentY, contentWidth, 1).fill('#CBD5E1');
-    currentY += 15;
-
-    doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text('OFFICIAL VERIFICATION & INSTITUTIONAL ENDORSEMENT', margin, currentY);
-    currentY += 15;
+    currentY = drawSectionHeader('7. Official Verification & Institutional Endorsement', currentY);
 
     const sigBoxWidth = (contentWidth - 20) / 3;
     const sigBoxHeight = 50;
