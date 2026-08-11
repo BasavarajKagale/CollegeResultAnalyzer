@@ -55,7 +55,7 @@ const ResultDetails = () => {
                     <a href={`${baseURL}/results/${id}/download/excel`} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.4rem' }}>
                         <FileSpreadsheet size={16} /> Export Excel
                     </a>
-                    <a href={`${baseURL}/results/${id}/download/pdf`} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.4rem' }}>
+                    <a href={`${baseURL}/results/${id}/download/pdf`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.4rem' }}>
                         <FileText size={16} /> PDF Report
                     </a>
                 </div>

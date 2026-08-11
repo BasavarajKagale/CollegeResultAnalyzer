@@ -3,6 +3,7 @@ const Student = require('../models/Student');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const { parseResultFile } = require('../utils/parser');
+const { generateResultPDF } = require('../utils/pdfGenerator');
 
 const uploadResult = async (req, res) => {
     try {
@@ -123,42 +124,15 @@ const exportExcel = async (req, res) => {
 const exportPDF = async (req, res) => {
     try {
         const result = await Result.findById(req.params.id);
+        if (!result) {
+            return res.status(404).json({ error: 'Result record not found' });
+        }
         const students = await Student.find({ resultId: req.params.id }).sort({ rank: 1 });
 
-        const doc = new PDFDocument();
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=result_${req.params.id}.pdf`);
-        doc.pipe(res);
-
-        doc.fontSize(20).text('College Result Analysis Report', { align: 'center' });
-        doc.moveDown();
-        doc.fontSize(14).text(`File: ${result.filename}`);
-        doc.text(`Date: ${result.uploadDate.toDateString()}`);
-        doc.moveDown();
-
-        doc.fontSize(16).text('Overall Statistics', { underline: true });
-        doc.fontSize(12).text(`Total Students: ${result.overallStats.totalStudents}`);
-        doc.text(`Total Passed: ${result.overallStats.passCount}`);
-        doc.text(`Total Failed: ${result.overallStats.failCount}`);
-        doc.text(`Overall Pass Percentage: ${result.overallStats.passPercentage.toFixed(2)}%`);
-        doc.moveDown();
-
-        doc.fontSize(16).text('Top 3 Students', { underline: true });
-        result.toppers.forEach(t => {
-            doc.fontSize(12).text(`${t.rank}. ${t.name} (${t.usn}) - ${t.totalMarks} (${t.percentage}%)`);
-        });
-        doc.moveDown();
-
-        doc.addPage();
-        doc.fontSize(16).text('Subject Analysis', { underline: true });
-        result.subjects.forEach(s => {
-            doc.fontSize(12).text(`- ${s.name}: Pass %: ${s.passPercentage.toFixed(2)}%, Highest: ${s.highestMarks}`);
-        });
-
-        doc.end();
+        return generateResultPDF(result, students, res);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('PDF Generation Error:', err);
+        res.status(500).json({ error: 'Server error generating PDF report' });
     }
 };
 
