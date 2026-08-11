@@ -82,9 +82,9 @@ async function generateResultPDF(result, students, res) {
         return y + 24;
     }
 
-    // Helper: Dynamic Page Overflow Check (Prevents any extra blank pages!)
+    // Helper: Strict Page Overflow Check (ONLY breaks page when content actually overflows!)
     function checkPageBreak(neededHeight, titleOnNewPage = '') {
-        if (currentY + neededHeight > pageBottom) {
+        if (currentY + neededHeight > pageBottom && currentY > margin + 10) {
             doc.addPage();
             currentY = margin;
             if (titleOnNewPage) {
@@ -100,6 +100,10 @@ async function generateResultPDF(result, students, res) {
     const failPct = 100 - passPct;
     const subjects = result.subjects || [];
     const totalStudentsCount = stats.totalStudents || students.length || 1;
+
+    // Calculate Y-axis upper limit with 25% buffer room so top legends and datalabels NEVER overlap!
+    const maxSubjectAppeared = Math.max(...subjects.map(s => (s.passCount || 0) + (s.failCount || 0)), 100);
+    const barYAxisMax = Math.ceil(maxSubjectAppeared * 1.25);
 
     // Pre-calculate Grade Distribution
     let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failedCount = 0;
@@ -120,7 +124,7 @@ async function generateResultPDF(result, students, res) {
         return students.length > 0 ? parseFloat((total / students.length).toFixed(1)) : 0;
     });
 
-    // Fetch High-Res Chart Buffers with Figure Numbering & Exact Visible Data Labels
+    // Chart 4.1 Config (Overall Result Doughnut)
     const chart1Config = {
         type: 'doughnut',
         data: {
@@ -137,7 +141,7 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Figure 4.1: Overall Result Distribution', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
+                title: { display: false },
                 legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
@@ -149,6 +153,7 @@ async function generateResultPDF(result, students, res) {
         }
     };
 
+    // Chart 4.2 Config (Grade Breakdown Doughnut)
     const chart2Config = {
         type: 'doughnut',
         data: {
@@ -168,7 +173,7 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Figure 4.2: Performance Grade Breakdown', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
+                title: { display: false },
                 legend: { position: 'bottom', labels: { font: { size: 10, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
@@ -180,6 +185,7 @@ async function generateResultPDF(result, students, res) {
         }
     };
 
+    // Chart 4.3 Config (Subject Pass vs Fail Bar Chart with top margin buffer)
     const chart3Config = {
         type: 'bar',
         data: {
@@ -191,23 +197,24 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Figure 4.3: Subject Pass vs Fail Comparison', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
-                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                title: { display: false },
+                legend: { position: 'top', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
                     align: 'end',
                     anchor: 'end',
-                    font: { weight: 'bold', size: 9 },
-                    color: '#1E293B'
+                    font: { weight: 'bold', size: 9.5 },
+                    color: '#0F172A'
                 }
             },
             scales: {
-                y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
+                y: { beginAtZero: true, max: barYAxisMax, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
                 x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
             }
         }
     };
 
+    // Chart 4.4 Config (Line Chart with top buffer margin)
     const chart4Config = {
         type: 'line',
         data: {
@@ -219,8 +226,8 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Figure 4.4: Subject Benchmark: Peak Marks vs Average', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
-                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                title: { display: false },
+                legend: { position: 'top', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
                     align: 'top',
@@ -230,17 +237,17 @@ async function generateResultPDF(result, students, res) {
                 }
             },
             scales: {
-                y: { min: 0, max: 110, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 10 } } },
+                y: { min: 0, max: 115, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 10 } } },
                 x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
             }
         }
     };
 
     const [chart1Buf, chart2Buf, chart3Buf, chart4Buf] = await Promise.all([
-        fetchChartImage(chart1Config, 600, 360),
-        fetchChartImage(chart2Config, 600, 360),
-        fetchChartImage(chart3Config, 600, 360),
-        fetchChartImage(chart4Config, 600, 360)
+        fetchChartImage(chart1Config, 600, 340),
+        fetchChartImage(chart2Config, 600, 340),
+        fetchChartImage(chart3Config, 600, 340),
+        fetchChartImage(chart4Config, 600, 340)
     ]);
 
     // ==========================================
@@ -348,7 +355,7 @@ async function generateResultPDF(result, students, res) {
 
     currentY += 16;
 
-    // 3. Subject-Wise Analytics Table
+    // 3. Subject-Wise Analytics Table (Pic 2 Table)
     currentY = drawSectionHeader('3. Subject-Wise Analytics & Performance Breakdown', currentY);
 
     const subCols = [
@@ -421,21 +428,36 @@ async function generateResultPDF(result, students, res) {
     // ==========================================
     // SECTION 4: VISUAL ANALYTICS & CHARTS DOSSIER
     // ==========================================
-    const chartW = (contentWidth - 15) / 2;
-    const chartH = 150;
-    const gridNeededHeight = 24 + (chartH * 2) + 25; // Header + 2 rows of charts
+    const chartW = (contentWidth - 15) / 2; // ~250 pt
+    const chartH = 140;
+    const gridNeededHeight = 24 + 14 + chartH + 12 + 14 + chartH + 20; // ~344 pt
 
     checkPageBreak(gridNeededHeight, '4. Visual Analytics & Graphical Benchmarks');
 
-    // Row 1 Charts (Figure 4.1 & Figure 4.2)
-    if (chart1Buf) doc.image(chart1Buf, margin, currentY, { width: chartW, height: chartH });
-    if (chart2Buf) doc.image(chart2Buf, margin + chartW + 15, currentY, { width: chartW, height: chartH });
-    currentY += chartH + 15;
+    // Row 1 Header Names & Images
+    const row1Y = currentY;
+    
+    // Left Subtitle
+    doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.1: Overall Result Distribution', margin, row1Y);
+    // Right Subtitle
+    doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.2: Performance Grade Breakdown', margin + chartW + 15, row1Y);
+    
+    const row1ImgY = row1Y + 12;
+    if (chart1Buf) doc.image(chart1Buf, margin, row1ImgY, { width: chartW, height: chartH });
+    if (chart2Buf) doc.image(chart2Buf, margin + chartW + 15, row1ImgY, { width: chartW, height: chartH });
 
-    // Row 2 Charts (Figure 4.3 & Figure 4.4)
-    if (chart3Buf) doc.image(chart3Buf, margin, currentY, { width: chartW, height: chartH });
-    if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, currentY, { width: chartW, height: chartH });
-    currentY += chartH + 20;
+    currentY = row1ImgY + chartH + 14;
+
+    // Row 2 Header Names & Images
+    const row2Y = currentY;
+    doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.3: Subject Pass vs Fail Comparison', margin, row2Y);
+    doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.4: Peak Score vs Average Benchmark', margin + chartW + 15, row2Y);
+
+    const row2ImgY = row2Y + 12;
+    if (chart3Buf) doc.image(chart3Buf, margin, row2ImgY, { width: chartW, height: chartH });
+    if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, row2ImgY, { width: chartW, height: chartH });
+
+    currentY = row2ImgY + chartH + 20;
 
     // ==========================================
     // SECTION 5: TOP 5 PERFORMERS PER SUBJECT
@@ -453,13 +475,11 @@ async function generateResultPDF(result, students, res) {
     subjects.forEach((sub) => {
         checkPageBreak(130, '5. Subject-Wise Academic Toppers (Continued)');
 
-        // Subject Title Banner
         doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill('#0F172A');
         doc.fillColor('#93C5FD').fontSize(8.5).font('Helvetica-Bold').text(`SUBJECT: ${sub.name}`, margin + 8, currentY + 4);
         doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text(`Peak Score: ${sub.highestMarks} / 100`, margin + contentWidth - 140, currentY + 4, { width: 130, align: 'right' });
         currentY += 18;
 
-        // Subtable Header
         doc.rect(margin, currentY, contentWidth, 16).fill('#334155');
         let stx = margin;
         subTopCols.forEach(col => {
@@ -468,7 +488,6 @@ async function generateResultPDF(result, students, res) {
         });
         currentY += 16;
 
-        // Extract Top 5 for this subject
         const top5Sub = students.slice()
             .sort((a, b) => (Number(b.marks[sub.name]) || 0) - (Number(a.marks[sub.name]) || 0))
             .slice(0, 5);
@@ -597,7 +616,7 @@ async function generateResultPDF(result, students, res) {
     });
 
     // ==========================================
-    // GLOBAL FOOTERS & PAGE NUMBERS (ALL PAGES)
+    // GLOBAL FOOTERS (NO PAGE NUMBERS AS REQUESTED)
     // ==========================================
     const pages = doc.bufferedPageRange();
     for (let i = 0; i < pages.count; i++) {
@@ -607,18 +626,12 @@ async function generateResultPDF(result, students, res) {
 
         doc.moveTo(margin, footerY - 5).lineTo(pageWidth - margin, footerY - 5).stroke('#E2E8F0');
 
-        doc.fillColor('#94A3B8').fontSize(7).font('Helvetica').text(
-            'College Result Analyzer System • Official Executive Academic Record • Confidential',
+        // Clean centered confidentiality footer without page numbers
+        doc.fillColor('#94A3B8').fontSize(7.5).font('Helvetica').text(
+            'College Result Analyzer System • Official Executive Academic Evaluation Report • Confidential',
             margin,
             footerY,
-            { width: 370, align: 'left' }
-        );
-
-        doc.fillColor('#475569').fontSize(7.5).font('Helvetica-Bold').text(
-            `Page ${i + 1} of ${pages.count}`,
-            pageWidth - margin - 100,
-            footerY,
-            { width: 100, align: 'right' }
+            { width: contentWidth, align: 'center' }
         );
     }
 
