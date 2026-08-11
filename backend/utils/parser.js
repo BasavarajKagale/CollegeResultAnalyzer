@@ -257,8 +257,8 @@ function extractSubjectsFromPDFHeader(headerText, expectedCount) {
 
     while ((match = codeRegex.exec(headerText)) !== null) {
         const code = match[1].toUpperCase();
-        // Skip if code looks like a USN pattern (e.g., 2KD23CS018 or 1AB23CS001)
-        if (!/\b[0-9][A-Z]{2}[0-9]{2}[A-Z]{2,3}[0-9]{3}\b/i.test(code)) {
+        // Skip if code looks like a USN pattern (e.g., 2KD23CS018 or 1AB23CS0001)
+        if (!/\b[0-9][A-Z]{2}[0-9]{2}[A-Z]{2,3}[0-9]{3}\b/i.test(code) && !GENERIC_USN_REGEX.test(code)) {
             matches.push({
                 code: code,
                 index: match.index,
@@ -285,11 +285,107 @@ function extractSubjectsFromPDFHeader(headerText, expectedCount) {
         }
     }
 
-    return subjects.slice(0, expectedCount);
+    return subjects.slice(0, expectedCount > 0 ? expectedCount : subjects.length);
 }
 
 /**
- * PDF Parsing Engine using pdf-parse text extraction
+ * Extract marks array and candidate name from a PDF student line, regardless of column order
+ * (Handles: Name USN Marks, USN Name Marks, Marks USN Name, USN Marks Name, Marks Name USN, etc.)
+ */
+function extractMarksAndNameFromLine(line, usnMatch, expectedSubjectCount) {
+    const usn = usnMatch[1].toUpperCase();
+    
+    // Remove USN token from line to avoid USN numbers interfering with marks/name
+    const usnStart = line.indexOf(usnMatch[0]);
+    const usnEnd = usnStart + usnMatch[0].length;
+    let remaining = line.slice(0, usnStart) + ' ' + line.slice(usnEnd);
+
+    // Find all integer number tokens in remaining text
+    const numberMatches = [];
+    const numRegex = /\b\d{1,3}\b/g;
+    let match;
+    while ((match = numRegex.exec(remaining)) !== null) {
+        const numVal = parseInt(match[0], 10);
+        numberMatches.push({
+            value: numVal,
+            str: match[0],
+            index: match.index,
+            length: match[0].length
+        });
+    }
+
+    let markNumbers = [];
+    let markMatchRanges = [];
+
+    if (expectedSubjectCount > 0 && numberMatches.length >= expectedSubjectCount) {
+        let bestStartIndex = 0;
+        
+        if (numberMatches.length > expectedSubjectCount) {
+            const firstVal = numberMatches[0].value;
+            const isFirstSerial = (numberMatches[0].index < 10) && (firstVal <= 500);
+            const lastVal = numberMatches[numberMatches.length - 1].value;
+            const isLastTotal = lastVal > 100 || (numberMatches.length - expectedSubjectCount === 1 && !isFirstSerial);
+
+            if (isFirstSerial && (numberMatches.length - 1 === expectedSubjectCount)) {
+                bestStartIndex = 1;
+            } else if (isLastTotal && (numberMatches.length - 1 === expectedSubjectCount)) {
+                bestStartIndex = 0;
+            } else {
+                let bestScore = -1;
+                for (let i = 0; i <= numberMatches.length - expectedSubjectCount; i++) {
+                    let score = 0;
+                    for (let j = i; j < i + expectedSubjectCount; j++) {
+                        if (numberMatches[j].value <= 100) score += 10;
+                        if (j > i) {
+                            const dist = numberMatches[j].index - (numberMatches[j-1].index + numberMatches[j-1].length);
+                            if (dist <= 5) score += 5;
+                        }
+                    }
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestStartIndex = i;
+                    }
+                }
+            }
+        }
+
+        const selectedMatches = numberMatches.slice(bestStartIndex, bestStartIndex + expectedSubjectCount);
+        markNumbers = selectedMatches.map(m => m.value);
+        markMatchRanges = selectedMatches;
+    } else {
+        markNumbers = numberMatches.map(m => m.value);
+        markMatchRanges = numberMatches;
+    }
+
+    // Mask selected mark number ranges in remaining string with spaces
+    let nameChars = remaining.split('');
+    markMatchRanges.forEach(m => {
+        for (let i = m.index; i < m.index + m.length; i++) {
+            nameChars[i] = ' ';
+        }
+    });
+
+    let rawName = nameChars.join('');
+
+    // Clean up rawName to isolate student name
+    rawName = rawName.replace(/^[0-9]+[\.\s\-\)]+/, '').replace(/^\#?[0-9]+\s+/, '');
+    rawName = rawName.replace(/\b(Name|USN|Sl\.?\s*No|S\.?\s*No|Marks|Total|Result|Status|Pass|Fail|Rank|Percentage)\b/gi, '');
+    rawName = rawName.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+    let cleanName = rawName.replace(/\s+/g, ' ').trim();
+
+    if (!cleanName || cleanName.length < 2 || /^\d+$/.test(cleanName)) {
+        cleanName = 'Unknown';
+    }
+
+    return {
+        name: cleanName,
+        usn: usn,
+        rawMarks: markNumbers
+    };
+}
+
+/**
+ * PDF Parsing Engine using pdf-parse text extraction (Format Agnostic)
  */
 async function parsePDFBuffer(buffer) {
     const instance = new PDFParse({ data: buffer });
@@ -298,10 +394,10 @@ async function parsePDFBuffer(buffer) {
 
     const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-    // 1. Locate student records and determine first student line
-    const rawStudents = [];
-    let detectedSubjectCount = 0;
+    // Pass 1: Identify student lines and determine expected subject count
     let firstStudentLineIdx = -1;
+    const studentLineMatches = [];
+    const markCountFrequency = {};
 
     lines.forEach((line, lineIdx) => {
         const usnMatch = line.match(VTU_USN_REGEX) || line.match(GENERIC_USN_REGEX);
@@ -310,45 +406,66 @@ async function parsePDFBuffer(buffer) {
                 firstStudentLineIdx = lineIdx;
             }
 
-            const usn = usnMatch[1].toUpperCase();
-            const idx = line.indexOf(usnMatch[0]);
+            const usnStart = line.indexOf(usnMatch[0]);
+            const usnEnd = usnStart + usnMatch[0].length;
+            const remaining = line.slice(0, usnStart) + ' ' + line.slice(usnEnd);
 
-            let before = line.slice(0, idx).trim().replace(/^[0-9]+[\.\s\-]+/, '');
-            let after = line.slice(idx + usnMatch[0].length).trim();
+            const numMatches = (remaining.match(/\b\d{1,3}\b/g) || []);
+            const numCount = numMatches.length;
 
-            const markNumbers = (after.match(/\b\d{1,3}\b/g) || []).map(n => parseInt(n, 10));
-            
-            if (markNumbers.length > detectedSubjectCount) {
-                detectedSubjectCount = markNumbers.length;
+            if (numCount > 0) {
+                markCountFrequency[numCount] = (markCountFrequency[numCount] || 0) + 1;
             }
 
-            rawStudents.push({
-                name: before || 'Unknown',
-                usn: usn,
-                rawMarks: markNumbers
+            studentLineMatches.push({
+                line,
+                usnMatch,
+                numCount
             });
         }
     });
 
-    if (rawStudents.length === 0) {
+    if (studentLineMatches.length === 0) {
         throw new Error('No valid student records detected in the PDF.');
     }
 
-    // 2. Extract Subject Headers from lines before first student record
+    // Most frequent number count per line represents expected subject count
+    let expectedSubjectCount = 0;
+    let maxFreq = 0;
+
+    Object.keys(markCountFrequency).forEach(countStr => {
+        const count = parseInt(countStr, 10);
+        const freq = markCountFrequency[countStr];
+        if (freq > maxFreq) {
+            maxFreq = freq;
+            expectedSubjectCount = count;
+        }
+    });
+
     const headerText = lines.slice(0, firstStudentLineIdx !== -1 ? firstStudentLineIdx : 10).join(' ');
-    let subjectNames = extractSubjectsFromPDFHeader(headerText, detectedSubjectCount);
+    let subjectNames = extractSubjectsFromPDFHeader(headerText, expectedSubjectCount);
 
-    // Format all subjects to "Title (Code)" format
-    subjectNames = subjectNames.map(formatSubjectHeader);
-
-    // Fallback if extracted count is less than detectedSubjectCount
-    if (subjectNames.length < detectedSubjectCount) {
-        for (let i = subjectNames.length; i < detectedSubjectCount; i++) {
+    if (subjectNames.length > 0 && subjectNames.length < expectedSubjectCount) {
+        expectedSubjectCount = subjectNames.length;
+    } else if (subjectNames.length === 0) {
+        for (let i = 0; i < expectedSubjectCount; i++) {
             subjectNames.push(`Subject ${i + 1}`);
         }
     }
 
-    // Format student docs with marks map
+    // Pass 2: Extract student records using extractMarksAndNameFromLine
+    const rawStudents = studentLineMatches.map(item => {
+        return extractMarksAndNameFromLine(item.line, item.usnMatch, expectedSubjectCount);
+    });
+
+    subjectNames = subjectNames.map(formatSubjectHeader);
+
+    if (subjectNames.length < expectedSubjectCount) {
+        for (let i = subjectNames.length; i < expectedSubjectCount; i++) {
+            subjectNames.push(`Subject ${i + 1}`);
+        }
+    }
+
     const finalStudents = rawStudents.map(s => {
         const marksMap = {};
         subjectNames.forEach((subName, i) => {
