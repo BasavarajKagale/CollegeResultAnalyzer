@@ -75,14 +75,14 @@ async function generateResultPDF(result, students, res) {
 
     let currentY = margin;
 
-    // Helper: Section Header with blue vertical pill accent
+    // Helper: Draw Section Header with left blue accent pill
     function drawSectionHeader(title, y) {
         doc.rect(margin, y, 4, 16).fill('#1E40AF');
         doc.fillColor('#0F172A').fontSize(11).font('Helvetica-Bold').text(title, margin + 12, y + 2);
         return y + 24;
     }
 
-    // Helper: Page Overflow Check
+    // Helper: Dynamic Page Overflow Check (Prevents any extra blank pages!)
     function checkPageBreak(neededHeight, titleOnNewPage = '') {
         if (currentY + neededHeight > pageBottom) {
             doc.addPage();
@@ -95,21 +95,11 @@ async function generateResultPDF(result, students, res) {
         return false;
     }
 
-    // Helper: Ensure New Page without creating empty blank pages
-    function ensureNewPage(titleOnNewPage = '') {
-        if (currentY > margin + 20) {
-            doc.addPage();
-            currentY = margin;
-        }
-        if (titleOnNewPage) {
-            currentY = drawSectionHeader(titleOnNewPage, currentY);
-        }
-    }
-
     const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
     const passPct = stats.passPercentage || 0;
     const failPct = 100 - passPct;
     const subjects = result.subjects || [];
+    const totalStudentsCount = stats.totalStudents || students.length || 1;
 
     // Pre-calculate Grade Distribution
     let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failedCount = 0;
@@ -121,8 +111,6 @@ async function generateResultPDF(result, students, res) {
         else passClass++;
     });
 
-    const totalStudentsCount = stats.totalStudents || students.length || 1;
-
     // Subject Averages
     const subjectAverages = subjects.map(sub => {
         let total = 0;
@@ -132,7 +120,7 @@ async function generateResultPDF(result, students, res) {
         return students.length > 0 ? parseFloat((total / students.length).toFixed(1)) : 0;
     });
 
-    // Fetch High-Res Chart Buffers with Crisp Legend Values and No Dark Inner Overlay Text
+    // Fetch High-Res Chart Buffers with Figure Numbering & Exact Visible Data Labels
     const chart1Config = {
         type: 'doughnut',
         data: {
@@ -149,9 +137,14 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Overall Result Distribution', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                title: { display: true, text: 'Figure 4.1: Overall Result Distribution', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
                 legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
-                datalabels: { display: false }
+                datalabels: {
+                    display: true,
+                    color: '#FFFFFF',
+                    font: { weight: 'bold', size: 12 },
+                    formatter: (val) => val > 50 ? val : ''
+                }
             }
         }
     };
@@ -175,9 +168,14 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Performance Grade Breakdown', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                title: { display: true, text: 'Figure 4.2: Performance Grade Breakdown', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
                 legend: { position: 'bottom', labels: { font: { size: 10, weight: 'bold' }, color: '#334155' } },
-                datalabels: { display: false }
+                datalabels: {
+                    display: true,
+                    color: '#FFFFFF',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (val) => val > 30 ? val : ''
+                }
             }
         }
     };
@@ -193,9 +191,15 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Subject-Wise Pass vs Fail Comparison', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                title: { display: true, text: 'Figure 4.3: Subject Pass vs Fail Comparison', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
                 legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
-                datalabels: { display: false }
+                datalabels: {
+                    display: true,
+                    align: 'end',
+                    anchor: 'end',
+                    font: { weight: 'bold', size: 9 },
+                    color: '#1E293B'
+                }
             },
             scales: {
                 y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
@@ -209,18 +213,24 @@ async function generateResultPDF(result, students, res) {
         data: {
             labels: subjects.map(s => getShortCode(s.name)),
             datasets: [
-                { label: 'Peak Score in Subject', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3, pointRadius: 5 },
-                { label: 'Batch Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.3, pointRadius: 5 }
+                { label: 'Peak Score in Subject', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.08)', fill: true, tension: 0.2, pointRadius: 5 },
+                { label: 'Batch Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.2, pointRadius: 5 }
             ]
         },
         options: {
             plugins: {
-                title: { display: true, text: 'Subject Benchmark: Peak Marks vs Average', font: { size: 15, weight: 'bold' }, color: '#0F172A' },
+                title: { display: true, text: 'Figure 4.4: Subject Benchmark: Peak Marks vs Average', font: { size: 14, weight: 'bold' }, color: '#0F172A' },
                 legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
-                datalabels: { display: false }
+                datalabels: {
+                    display: true,
+                    align: 'top',
+                    font: { weight: 'bold', size: 9 },
+                    color: '#1E40AF',
+                    formatter: (val) => val
+                }
             },
             scales: {
-                y: { min: 0, max: 100, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 10 } } },
+                y: { min: 0, max: 110, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 10 } } },
                 x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
             }
         }
@@ -406,28 +416,31 @@ async function generateResultPDF(result, students, res) {
         currentY += 20;
     });
 
-    // ==========================================
-    // PAGE 2: VISUAL ANALYTICS & CHARTS DOSSIER
-    // ==========================================
-    ensureNewPage('4. Visual Analytics & Graphical Benchmarks');
+    currentY += 16;
 
-    const chartW = (contentWidth - 15) / 2; // ~250 pt
-    const chartH = 160;
+    // ==========================================
+    // SECTION 4: VISUAL ANALYTICS & CHARTS DOSSIER
+    // ==========================================
+    const chartW = (contentWidth - 15) / 2;
+    const chartH = 150;
+    const gridNeededHeight = 24 + (chartH * 2) + 25; // Header + 2 rows of charts
 
-    // Row 1 Charts
+    checkPageBreak(gridNeededHeight, '4. Visual Analytics & Graphical Benchmarks');
+
+    // Row 1 Charts (Figure 4.1 & Figure 4.2)
     if (chart1Buf) doc.image(chart1Buf, margin, currentY, { width: chartW, height: chartH });
     if (chart2Buf) doc.image(chart2Buf, margin + chartW + 15, currentY, { width: chartW, height: chartH });
     currentY += chartH + 15;
 
-    // Row 2 Charts
+    // Row 2 Charts (Figure 4.3 & Figure 4.4)
     if (chart3Buf) doc.image(chart3Buf, margin, currentY, { width: chartW, height: chartH });
     if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, currentY, { width: chartW, height: chartH });
     currentY += chartH + 20;
 
     // ==========================================
-    // PAGE 3: TOP 5 PERFORMERS PER SUBJECT
+    // SECTION 5: TOP 5 PERFORMERS PER SUBJECT
     // ==========================================
-    ensureNewPage('5. Subject-Wise Academic Toppers (Top 5 per Subject)');
+    checkPageBreak(140, '5. Subject-Wise Academic Toppers (Top 5 per Subject)');
 
     const subTopCols = [
         { name: 'Rank', width: 35, align: 'center' },
@@ -490,9 +503,9 @@ async function generateResultPDF(result, students, res) {
     });
 
     // ==========================================
-    // PAGE 4: SUBJECT-WISE FAILED CANDIDATES BREAKDOWN
+    // SECTION 6: SUBJECT-WISE FAILED CANDIDATES BREAKDOWN
     // ==========================================
-    ensureNewPage('6. Subject-Wise Failure Directory & Backlog Breakdown');
+    checkPageBreak(100, '6. Subject-Wise Failure Directory & Backlog Breakdown');
 
     const failCols = [
         { name: 'S.No', width: 35, align: 'center' },
@@ -562,9 +575,7 @@ async function generateResultPDF(result, students, res) {
     // ==========================================
     // SECTION 7: ENDORSEMENT SIGNATURE BLOCK (Last Page)
     // ==========================================
-    checkPageBreak(85);
-
-    currentY = drawSectionHeader('7. Official Verification & Institutional Endorsement', currentY);
+    checkPageBreak(90, '7. Official Verification & Institutional Endorsement');
 
     const sigBoxWidth = (contentWidth - 20) / 3;
     const sigBoxHeight = 50;
