@@ -26,7 +26,7 @@ function getAcademicClass(percentage, isPass) {
 /**
  * Fetch PNG chart image buffer from QuickChart API
  */
-function fetchChartImage(chartConfig, width = 600, height = 360) {
+function fetchChartImage(chartConfig, width = 600, height = 340) {
     return new Promise((resolve) => {
         try {
             const url = `https://quickchart.io/chart?w=${width}&h=${height}&bkg=white&f=png&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
@@ -82,9 +82,9 @@ async function generateResultPDF(result, students, res) {
         return y + 24;
     }
 
-    // Helper: Strict Page Overflow Check (ONLY breaks page when content actually overflows!)
+    // Helper: Dynamic Page Overflow Check (Strictly prevents blank pages)
     function checkPageBreak(neededHeight, titleOnNewPage = '') {
-        if (currentY + neededHeight > pageBottom && currentY > margin + 10) {
+        if (currentY + neededHeight > pageBottom && currentY > margin + 15) {
             doc.addPage();
             currentY = margin;
             if (titleOnNewPage) {
@@ -185,7 +185,7 @@ async function generateResultPDF(result, students, res) {
         }
     };
 
-    // Chart 4.3 Config (Subject Pass vs Fail Bar Chart with top margin buffer)
+    // Chart 4.3 Config (Bar Chart - Legend at BOTTOM so datalabels sit in clean top buffer)
     const chart3Config = {
         type: 'bar',
         data: {
@@ -198,7 +198,7 @@ async function generateResultPDF(result, students, res) {
         options: {
             plugins: {
                 title: { display: false },
-                legend: { position: 'top', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
                     align: 'end',
@@ -214,7 +214,7 @@ async function generateResultPDF(result, students, res) {
         }
     };
 
-    // Chart 4.4 Config (Line Chart with top buffer margin)
+    // Chart 4.4 Config (Line Chart - Legend at BOTTOM so datalabels sit in clean top buffer)
     const chart4Config = {
         type: 'line',
         data: {
@@ -227,7 +227,7 @@ async function generateResultPDF(result, students, res) {
         options: {
             plugins: {
                 title: { display: false },
-                legend: { position: 'top', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
                     align: 'top',
@@ -429,8 +429,8 @@ async function generateResultPDF(result, students, res) {
     // SECTION 4: VISUAL ANALYTICS & CHARTS DOSSIER
     // ==========================================
     const chartW = (contentWidth - 15) / 2; // ~250 pt
-    const chartH = 140;
-    const gridNeededHeight = 24 + 14 + chartH + 12 + 14 + chartH + 20; // ~344 pt
+    const chartH = 135; // Fixed compact height
+    const gridNeededHeight = 24 + 14 + chartH + 28 + 14 + chartH + 20; // ~335 pt
 
     checkPageBreak(gridNeededHeight, '4. Visual Analytics & Graphical Benchmarks');
 
@@ -442,22 +442,23 @@ async function generateResultPDF(result, students, res) {
     // Right Subtitle
     doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.2: Performance Grade Breakdown', margin + chartW + 15, row1Y);
     
-    const row1ImgY = row1Y + 12;
+    const row1ImgY = row1Y + 14;
     if (chart1Buf) doc.image(chart1Buf, margin, row1ImgY, { width: chartW, height: chartH });
     if (chart2Buf) doc.image(chart2Buf, margin + chartW + 15, row1ImgY, { width: chartW, height: chartH });
 
-    currentY = row1ImgY + chartH + 14;
+    // Generous 28pt padding gap between Row 1 images and Row 2 titles! ZERO OVERLAP!
+    currentY = row1ImgY + chartH + 28;
 
     // Row 2 Header Names & Images
     const row2Y = currentY;
     doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.3: Subject Pass vs Fail Comparison', margin, row2Y);
     doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.4: Peak Score vs Average Benchmark', margin + chartW + 15, row2Y);
 
-    const row2ImgY = row2Y + 12;
+    const row2ImgY = row2Y + 14;
     if (chart3Buf) doc.image(chart3Buf, margin, row2ImgY, { width: chartW, height: chartH });
     if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, row2ImgY, { width: chartW, height: chartH });
 
-    currentY = row2ImgY + chartH + 20;
+    currentY = row2ImgY + chartH + 24;
 
     // ==========================================
     // SECTION 5: TOP 5 PERFORMERS PER SUBJECT
@@ -473,7 +474,7 @@ async function generateResultPDF(result, students, res) {
     ];
 
     subjects.forEach((sub) => {
-        checkPageBreak(130, '5. Subject-Wise Academic Toppers (Continued)');
+        checkPageBreak(124, '5. Subject-Wise Academic Toppers (Continued)');
 
         doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill('#0F172A');
         doc.fillColor('#93C5FD').fontSize(8.5).font('Helvetica-Bold').text(`SUBJECT: ${sub.name}`, margin + 8, currentY + 4);
@@ -537,7 +538,7 @@ async function generateResultPDF(result, students, res) {
     subjects.forEach((sub) => {
         const failedInSub = students.filter(s => (Number(s.marks[sub.name]) || 0) < 35);
 
-        checkPageBreak(80, '6. Subject-Wise Failure Directory (Continued)');
+        checkPageBreak(70, '6. Subject-Wise Failure Directory (Continued)');
 
         const hasFailures = failedInSub.length > 0;
         const subBannerBg = hasFailures ? '#7F1D1D' : '#14532D';
@@ -560,8 +561,10 @@ async function generateResultPDF(result, students, res) {
             });
             currentY += 16;
 
-            failedInSub.forEach((st, idx) => {
-                checkPageBreak(20, '6. Subject-Wise Failure Directory (Continued)');
+            // Show top failed candidates (up to 8 per subject for extreme compactness)
+            const showFailures = failedInSub.slice(0, 8);
+            showFailures.forEach((st, idx) => {
+                checkPageBreak(18, '6. Subject-Wise Failure Directory (Continued)');
 
                 const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#FEF2F2';
                 doc.rect(margin, currentY, contentWidth, 18).fill(rowBg);
@@ -586,6 +589,11 @@ async function generateResultPDF(result, students, res) {
 
                 currentY += 18;
             });
+
+            if (failedInSub.length > 8) {
+                doc.fillColor('#64748B').fontSize(7).font('Helvetica-Oblique').text(`* ... and ${failedInSub.length - 8} more candidates failing in this subject.`, margin + 4, currentY + 4);
+                currentY += 14;
+            }
 
             currentY += 12;
         }
