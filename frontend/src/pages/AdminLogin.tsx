@@ -63,7 +63,7 @@ const AdminLogin = () => {
                         <input 
                             type="email" 
                             required
-                            placeholder="basavaraj@kle.com"
+                            placeholder="Enter your email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             style={{
