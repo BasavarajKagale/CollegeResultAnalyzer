@@ -110,9 +110,9 @@ async function generateResultPDF(result, students, res) {
     const subjects = result.subjects || [];
     const totalStudentsCount = stats.totalStudents || students.length || 1;
 
-    // Calculate Y-axis upper limit with 30% buffer room so top labels NEVER touch top of chart
+    // Calculate Y-axis upper limit with 45% buffer room so legend boxes and bar datalabels NEVER overlap!
     const maxSubjectAppeared = Math.max(...subjects.map(s => (s.passCount || 0) + (s.failCount || 0)), 100);
-    const barYAxisMax = Math.ceil(maxSubjectAppeared * 1.30);
+    const barYAxisMax = Math.ceil(maxSubjectAppeared * 1.45);
 
     // Pre-calculate Grade Distribution
     let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failedCount = 0;
@@ -192,7 +192,7 @@ async function generateResultPDF(result, students, res) {
         }
     };
 
-    // Chart 4.3 Config (Bar Chart - legend: { display: false } inside QuickChart to eliminate ANY legend overlap!)
+    // Chart 4.3 Config (Bar Chart - Native Legend at TOP with generous 45% Y-axis headroom for ZERO overlap!)
     const chart3Config = {
         type: 'bar',
         data: {
@@ -203,8 +203,14 @@ async function generateResultPDF(result, students, res) {
             ]
         },
         options: {
+            layout: { padding: { top: 20, bottom: 5, left: 5, right: 5 } },
             plugins: {
-                legend: { display: false }, // Legend rendered cleanly in PDFKit!
+                legend: { 
+                    display: true,
+                    position: 'top',
+                    align: 'center',
+                    labels: { font: { size: 10, weight: 'bold' }, color: '#334155', boxWidth: 24, padding: 15 }
+                },
                 datalabels: {
                     display: true,
                     align: 'end',
@@ -220,7 +226,7 @@ async function generateResultPDF(result, students, res) {
         }
     };
 
-    // Chart 4.4 Config (Line Chart - legend: { display: false } inside QuickChart to eliminate ANY legend overlap!)
+    // Chart 4.4 Config (Line Chart - Native Legend at TOP with 25-mark headroom for ZERO overlap!)
     const chart4Config = {
         type: 'line',
         data: {
@@ -231,8 +237,14 @@ async function generateResultPDF(result, students, res) {
             ]
         },
         options: {
+            layout: { padding: { top: 20, bottom: 5, left: 5, right: 5 } },
             plugins: {
-                legend: { display: false }, // Legend rendered cleanly in PDFKit!
+                legend: { 
+                    display: true,
+                    position: 'top',
+                    align: 'center',
+                    labels: { font: { size: 10, weight: 'bold' }, color: '#334155', boxWidth: 24, padding: 15 }
+                },
                 datalabels: {
                     display: true,
                     align: 'top',
@@ -242,7 +254,7 @@ async function generateResultPDF(result, students, res) {
                 }
             },
             scales: {
-                y: { min: 0, max: 115, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 9 } } },
+                y: { min: 0, max: 125, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 9 } } },
                 x: { grid: { display: false }, ticks: { font: { size: 9, weight: 'bold' } } }
             }
         }
@@ -454,17 +466,13 @@ async function generateResultPDF(result, students, res) {
     // Row 2 Header Names & Images
     const row2Y = currentY;
     
-    // Left Subtitle & PDFKit Legend Line for Figure 4.3 (ZERO overlap!)
+    // Left Subtitle
     doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.3: Subject Pass vs Fail Comparison', margin, row2Y);
-    doc.fillColor('#16A34A').fontSize(7).font('Helvetica-Bold').text('■ Passed Candidates   ', margin, row2Y + 11, { continued: true });
-    doc.fillColor('#DC2626').fontSize(7).font('Helvetica-Bold').text('■ Failed Candidates');
 
-    // Right Subtitle & PDFKit Legend Line for Figure 4.4 (ZERO overlap!)
+    // Right Subtitle
     doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.4: Peak Score vs Average Benchmark', margin + chartW + 15, row2Y);
-    doc.fillColor('#2563EB').fontSize(7).font('Helvetica-Bold').text('● Peak Score   ', margin + chartW + 15, row2Y + 11, { continued: true });
-    doc.fillColor('#0D9488').fontSize(7).font('Helvetica-Bold').text('● Batch Average');
 
-    const row2ImgY = row2Y + 22;
+    const row2ImgY = row2Y + 14;
     if (chart3Buf) doc.image(chart3Buf, margin, row2ImgY, { width: chartW, height: chartH });
     if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, row2ImgY, { width: chartW, height: chartH });
 
