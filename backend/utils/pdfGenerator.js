@@ -1,7 +1,8 @@
 const PDFDocument = require('pdfkit');
+const https = require('https');
 
 /**
- * Utility function to extract short subject code for compact table display
+ * Extract short subject code for compact headers
  */
 function getShortCode(subjectName) {
     if (!subjectName) return 'SUB';
@@ -23,9 +24,33 @@ function getAcademicClass(percentage, isPass) {
 }
 
 /**
- * Main PDF Generation Handler for College Result Analyzer
+ * Fetch PNG chart image buffer from QuickChart API
  */
-function generateResultPDF(result, students, res) {
+function fetchChartImage(chartConfig, width = 500, height = 300) {
+    return new Promise((resolve) => {
+        try {
+            const url = `https://quickchart.io/chart?w=${width}&h=${height}&bkg=white&f=png&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
+            const req = https.get(url, (res) => {
+                if (res.statusCode !== 200) return resolve(null);
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(chunk));
+                res.on('end', () => resolve(Buffer.concat(chunks)));
+            });
+            req.on('error', () => resolve(null));
+            req.setTimeout(4000, () => {
+                req.destroy();
+                resolve(null);
+            });
+        } catch (err) {
+            resolve(null);
+        }
+    });
+}
+
+/**
+ * Main Async PDF Generator Handler for College Result Analyzer
+ */
+async function generateResultPDF(result, students, res) {
     const doc = new PDFDocument({
         margin: 40,
         size: 'A4',
@@ -33,12 +58,13 @@ function generateResultPDF(result, students, res) {
         info: {
             Title: `Academic Performance Report - ${result.filename}`,
             Author: 'College Result Analyzer System',
-            Subject: 'Official College Result Analysis Report'
+            Subject: 'Official Executive College Result Analysis Report'
         }
     });
 
+    const cleanFilenameStr = (result.filename || 'Result_Analysis').replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, '_');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="result_${result._id}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Result_Report_${cleanFilenameStr}.pdf"`);
     doc.pipe(res);
 
     const pageWidth = 595.28;
@@ -49,37 +75,138 @@ function generateResultPDF(result, students, res) {
 
     let currentY = margin;
 
-    // Helper: Draw Section Header with left accent pill
+    // Helper: Section Header with blue vertical pill accent
     function drawSectionHeader(title, y) {
-        // Accent vertical bar
         doc.rect(margin, y, 4, 16).fill('#1E40AF');
         doc.fillColor('#0F172A').fontSize(11).font('Helvetica-Bold').text(title, margin + 12, y + 2);
         return y + 24;
     }
 
+    // Helper: Page Overflow Check
+    function checkPageBreak(neededHeight, titleOnNewPage = '') {
+        if (currentY + neededHeight > pageBottom) {
+            doc.addPage();
+            currentY = margin;
+            if (titleOnNewPage) {
+                currentY = drawSectionHeader(titleOnNewPage, currentY);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
+    const passPct = stats.passPercentage || 0;
+    const failPct = 100 - passPct;
+    const subjects = result.subjects || [];
+
+    // Pre-calculate Grade Distribution
+    let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failedCount = 0;
+    students.forEach(s => {
+        if (!s.isPass) failedCount++;
+        else if (s.percentage >= 75) distinction++;
+        else if (s.percentage >= 60) firstClass++;
+        else if (s.percentage >= 50) secondClass++;
+        else passClass++;
+    });
+
+    // Subject Averages
+    const subjectAverages = subjects.map(sub => {
+        let total = 0;
+        students.forEach(st => {
+            total += Number(st.marks[sub.name]) || 0;
+        });
+        return students.length > 0 ? parseFloat((total / students.length).toFixed(1)) : 0;
+    });
+
+    // Fetch Chart Buffers in Parallel
+    const chart1Config = {
+        type: 'doughnut',
+        data: {
+            labels: [`Passed (${stats.passCount})`, `Failed (${stats.failCount})`],
+            datasets: [{ data: [stats.passCount, stats.failCount], backgroundColor: ['#16A34A', '#DC2626'] }]
+        },
+        options: {
+            plugins: {
+                title: { display: true, text: 'Overall Result Distribution', font: { size: 14, weight: 'bold' } },
+                legend: { position: 'bottom' }
+            }
+        }
+    };
+
+    const chart2Config = {
+        type: 'doughnut',
+        data: {
+            labels: [`Distinction 75%+ (${distinction})`, `First Class 60-74% (${firstClass})`, `Second Class 50-59% (${secondClass})`, `Pass Class 35-49% (${passClass})`, `Failed (${failedCount})`],
+            datasets: [{ data: [distinction, firstClass, secondClass, passClass, failedCount], backgroundColor: ['#D97706', '#16A34A', '#2563EB', '#EAB308', '#DC2626'] }]
+        },
+        options: {
+            plugins: {
+                title: { display: true, text: 'Performance Grade Breakdown', font: { size: 14, weight: 'bold' } },
+                legend: { position: 'bottom' }
+            }
+        }
+    };
+
+    const chart3Config = {
+        type: 'bar',
+        data: {
+            labels: subjects.map(s => getShortCode(s.name)),
+            datasets: [
+                { label: 'Passed', data: subjects.map(s => s.passCount), backgroundColor: '#16A34A' },
+                { label: 'Failed', data: subjects.map(s => s.failCount), backgroundColor: '#DC2626' }
+            ]
+        },
+        options: {
+            plugins: {
+                title: { display: true, text: 'Subject-Wise Pass vs Fail Comparison', font: { size: 14, weight: 'bold' } },
+                legend: { position: 'bottom' }
+            }
+        }
+    };
+
+    const chart4Config = {
+        type: 'line',
+        data: {
+            labels: subjects.map(s => getShortCode(s.name)),
+            datasets: [
+                { label: 'Highest Score', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3 },
+                { label: 'Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.3 }
+            ]
+        },
+        options: {
+            plugins: {
+                title: { display: true, text: 'Subject Benchmark: Peak Marks vs Average', font: { size: 14, weight: 'bold' } },
+                legend: { position: 'bottom' }
+            }
+        }
+    };
+
+    const [chart1Buf, chart2Buf, chart3Buf, chart4Buf] = await Promise.all([
+        fetchChartImage(chart1Config, 480, 280),
+        fetchChartImage(chart2Config, 480, 280),
+        fetchChartImage(chart3Config, 480, 280),
+        fetchChartImage(chart4Config, 480, 280)
+    ]);
+
     // ==========================================
-    // PAGE 1: EXECUTIVE DASHBOARD & SUMMARY
+    // PAGE 1: EXECUTIVE SUMMARY & DASHBOARD
     // ==========================================
 
-    // 1. Top Decorative Brand Bar
+    // Top Decorative Accent Bar
     doc.rect(0, 0, pageWidth, 6).fill('#2563EB');
 
-    // 2. Header Banner Box
+    // Header Banner Box
     currentY = 25;
     const headerBoxHeight = 70;
     doc.roundedRect(margin, currentY, contentWidth, headerBoxHeight, 6).fill('#0F172A');
 
-    // Subheader category
     doc.fillColor('#93C5FD').fontSize(7.5).font('Helvetica-Bold').text('INSTITUTIONAL EVALUATION & ACADEMIC DOSSIER', margin + 16, currentY + 12, { characterSpacing: 1 });
-    
-    // Title
     doc.fillColor('#FFFFFF').fontSize(16).font('Helvetica-Bold').text('COLLEGE RESULT ANALYSIS REPORT', margin + 16, currentY + 24);
     
-    // Subtitle / File Name
     const cleanFilename = (result.filename || 'Academic_Result.pdf').substring(0, 55);
     doc.fillColor('#CBD5E1').fontSize(8.5).font('Helvetica').text(`Document: ${cleanFilename}`, margin + 16, currentY + 46);
 
-    // Right-aligned header info
     const uploadDateStr = new Date(result.uploadDate || Date.now()).toLocaleDateString('en-US', {
         year: 'numeric', month: 'short', day: 'numeric'
     });
@@ -88,83 +215,44 @@ function generateResultPDF(result, students, res) {
 
     currentY += headerBoxHeight + 15;
 
-    // 3. Executive KPI Cards (4 Side-by-Side Cards)
+    // 1. Executive Summary KPI Cards
     currentY = drawSectionHeader('1. Executive Summary & Batch Statistics', currentY);
 
     const cardGap = 9;
-    const cardWidth = (contentWidth - cardGap * 3) / 4; // ~122 pt
+    const cardWidth = (contentWidth - cardGap * 3) / 4;
     const cardHeight = 52;
 
-    const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
-    const passPct = stats.passPercentage || 0;
-    const failPct = 100 - passPct;
-
     const kpis = [
-        {
-            label: 'TOTAL CANDIDATES',
-            value: `${stats.totalStudents || 0}`,
-            subtext: 'Evaluated Batch',
-            bgColor: '#F8FAFC',
-            borderColor: '#E2E8F0',
-            valColor: '#0F172A'
-        },
-        {
-            label: 'SUCCESSFUL',
-            value: `${stats.passCount || 0}`,
-            subtext: `${passPct.toFixed(1)}% Pass Rate`,
-            bgColor: '#F0FDF4',
-            borderColor: '#BBF7D0',
-            valColor: '#16A34A'
-        },
-        {
-            label: 'UNSUCCESSFUL',
-            value: `${stats.failCount || 0}`,
-            subtext: `${failPct.toFixed(1)}% Fail / Backlogs`,
-            bgColor: '#FEF2F2',
-            borderColor: '#FECACA',
-            valColor: '#DC2626'
-        },
-        {
-            label: 'OVERALL PASS %',
-            value: `${passPct.toFixed(2)}%`,
-            subtext: 'Batch Average',
-            bgColor: '#EFF6FF',
-            borderColor: '#BFDBFE',
-            valColor: '#2563EB'
-        }
+        { label: 'TOTAL CANDIDATES', value: `${stats.totalStudents || 0}`, subtext: 'Evaluated Batch', bgColor: '#F8FAFC', borderColor: '#E2E8F0', valColor: '#0F172A' },
+        { label: 'SUCCESSFUL', value: `${stats.passCount || 0}`, subtext: `${passPct.toFixed(1)}% Pass Rate`, bgColor: '#F0FDF4', borderColor: '#BBF7D0', valColor: '#16A34A' },
+        { label: 'UNSUCCESSFUL', value: `${stats.failCount || 0}`, subtext: `${failPct.toFixed(1)}% Fail / Backlogs`, bgColor: '#FEF2F2', borderColor: '#FECACA', valColor: '#DC2626' },
+        { label: 'OVERALL PASS %', value: `${passPct.toFixed(2)}%`, subtext: 'Batch Average', bgColor: '#EFF6FF', borderColor: '#BFDBFE', valColor: '#2563EB' }
     ];
 
     kpis.forEach((kpi, idx) => {
         const cx = margin + idx * (cardWidth + cardGap);
-        // Card BG & Border
         doc.roundedRect(cx, currentY, cardWidth, cardHeight, 6).fillAndStroke(kpi.bgColor, kpi.borderColor);
-
-        // Value
         doc.fillColor(kpi.valColor).fontSize(14).font('Helvetica-Bold').text(kpi.value, cx + 8, currentY + 8, { width: cardWidth - 16, align: 'left' });
-        
-        // Label
         doc.fillColor('#475569').fontSize(6.5).font('Helvetica-Bold').text(kpi.label, cx + 8, currentY + 27, { width: cardWidth - 16 });
-
-        // Subtext
         doc.fillColor('#64748B').fontSize(6.5).font('Helvetica').text(kpi.subtext, cx + 8, currentY + 37, { width: cardWidth - 16 });
     });
 
-    currentY += cardHeight + 18;
+    currentY += cardHeight + 16;
 
-    // 4. Academic Toppers (Toppers Hall of Fame)
-    currentY = drawSectionHeader('2. Academic Toppers (Hall of Fame)', currentY);
+    // 2. Academic Toppers (Top 5 Overall Toppers)
+    currentY = drawSectionHeader('2. Academic Toppers (Top 5 Overall Toppers)', currentY);
 
-    const toppers = result.toppers || [];
+    const top5Overall = students.slice().sort((a, b) => b.totalMarks - a.totalMarks).slice(0, 5);
+
     const topperCols = [
         { name: 'Rank', width: 35, align: 'center' },
         { name: 'USN', width: 90, align: 'left' },
         { name: 'Student Name', width: 160, align: 'left' },
-        { name: 'Marks Scored', width: 75, align: 'center' },
+        { name: 'Total Marks', width: 75, align: 'center' },
         { name: 'Percentage', width: 65, align: 'center' },
         { name: 'Class / Result', width: 90, align: 'left' }
     ];
 
-    // Topper Table Header
     doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill('#1E293B');
     let tx = margin;
     topperCols.forEach(col => {
@@ -173,54 +261,42 @@ function generateResultPDF(result, students, res) {
     });
     currentY += 18;
 
-    if (toppers.length === 0) {
-        doc.fillColor('#64748B').fontSize(8).font('Helvetica-Oblique').text('No topper records available.', margin + 8, currentY + 6);
+    top5Overall.forEach((top, idx) => {
+        const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+        doc.rect(margin, currentY, contentWidth, 20).fill(rowBg);
+        doc.rect(margin, currentY, contentWidth, 20).stroke('#E2E8F0');
+
+        let rx = margin;
+        
+        const rankBadgeColor = idx === 0 ? '#FEF3C7' : idx === 1 ? '#F1F5F9' : idx === 2 ? '#FFEDD5' : '#EFF6FF';
+        const rankTextColor = idx === 0 ? '#D97706' : idx === 1 ? '#475569' : idx === 2 ? '#C2410C' : '#2563EB';
+        doc.roundedRect(rx + 6, currentY + 3, 22, 14, 3).fill(rankBadgeColor);
+        doc.fillColor(rankTextColor).fontSize(8).font('Helvetica-Bold').text(`#${idx + 1}`, rx + 6, currentY + 5, { width: 22, align: 'center' });
+        rx += topperCols[0].width;
+
+        doc.fillColor('#334155').fontSize(8).font('Helvetica-Bold').text(top.usn || '-', rx + 4, currentY + 5, { width: topperCols[1].width - 8, align: 'left' });
+        rx += topperCols[1].width;
+
+        doc.fillColor('#0F172A').fontSize(8).font('Helvetica-Bold').text(top.name || '-', rx + 4, currentY + 5, { width: topperCols[2].width - 8, align: 'left' });
+        rx += topperCols[2].width;
+
+        doc.fillColor('#1E40AF').fontSize(8.5).font('Helvetica-Bold').text(`${top.totalMarks}`, rx + 4, currentY + 5, { width: topperCols[3].width - 8, align: 'center' });
+        rx += topperCols[3].width;
+
+        doc.fillColor('#0F172A').fontSize(8.5).font('Helvetica-Bold').text(`${top.percentage}%`, rx + 4, currentY + 5, { width: topperCols[4].width - 8, align: 'center' });
+        rx += topperCols[4].width;
+
+        const cls = getAcademicClass(top.percentage, top.isPass);
+        doc.fillColor('#15803D').fontSize(7.5).font('Helvetica').text(cls, rx + 4, currentY + 5, { width: topperCols[5].width - 8, align: 'left' });
+
         currentY += 20;
-    } else {
-        toppers.forEach((top, idx) => {
-            const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-            doc.rect(margin, currentY, contentWidth, 20).fill(rowBg);
-            doc.rect(margin, currentY, contentWidth, 20).stroke('#E2E8F0');
+    });
 
-            let rx = margin;
-            
-            // Rank Badge
-            const rankBadgeColor = idx === 0 ? '#FEF3C7' : idx === 1 ? '#F1F5F9' : '#FFEDD5';
-            const rankTextColor = idx === 0 ? '#D97706' : idx === 1 ? '#475569' : '#C2410C';
-            doc.roundedRect(rx + 6, currentY + 3, 22, 14, 3).fill(rankBadgeColor);
-            doc.fillColor(rankTextColor).fontSize(8).font('Helvetica-Bold').text(`#${top.rank}`, rx + 6, currentY + 5, { width: 22, align: 'center' });
-            rx += topperCols[0].width;
+    currentY += 16;
 
-            // USN
-            doc.fillColor('#334155').fontSize(8).font('Helvetica-Bold').text(top.usn || '-', rx + 4, currentY + 5, { width: topperCols[1].width - 8, align: 'left' });
-            rx += topperCols[1].width;
-
-            // Name
-            doc.fillColor('#0F172A').fontSize(8).font('Helvetica-Bold').text(top.name || '-', rx + 4, currentY + 5, { width: topperCols[2].width - 8, align: 'left' });
-            rx += topperCols[2].width;
-
-            // Marks
-            doc.fillColor('#1E40AF').fontSize(8.5).font('Helvetica-Bold').text(`${top.totalMarks}`, rx + 4, currentY + 5, { width: topperCols[3].width - 8, align: 'center' });
-            rx += topperCols[3].width;
-
-            // Percentage
-            doc.fillColor('#0F172A').fontSize(8.5).font('Helvetica-Bold').text(`${top.percentage}%`, rx + 4, currentY + 5, { width: topperCols[4].width - 8, align: 'center' });
-            rx += topperCols[4].width;
-
-            // Class
-            const cls = getAcademicClass(top.percentage, true);
-            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica').text(cls, rx + 4, currentY + 5, { width: topperCols[5].width - 8, align: 'left' });
-
-            currentY += 20;
-        });
-    }
-
-    currentY += 15;
-
-    // 5. Subject Analysis Summary Table
+    // 3. Subject-Wise Analytics Table (Preserved exactly as requested in Pic 2)
     currentY = drawSectionHeader('3. Subject-Wise Analytics & Performance Breakdown', currentY);
 
-    const subjects = result.subjects || [];
     const subCols = [
         { name: 'Subject Title & Code', width: 170, align: 'left' },
         { name: 'Appeared', width: 50, align: 'center' },
@@ -231,7 +307,6 @@ function generateResultPDF(result, students, res) {
         { name: 'Performance Bar', width: 80, align: 'center' }
     ];
 
-    // Header Row
     doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill('#1E293B');
     let sx = margin;
     subCols.forEach(col => {
@@ -247,45 +322,37 @@ function generateResultPDF(result, students, res) {
 
         let rx = margin;
 
-        // Subject Name
         const cleanSubName = (sub.name || '').substring(0, 36);
         doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(cleanSubName, rx + 4, currentY + 5, { width: subCols[0].width - 8, align: 'left' });
         rx += subCols[0].width;
 
-        // Appeared
         const appeared = (sub.passCount || 0) + (sub.failCount || 0);
         doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${appeared}`, rx + 4, currentY + 5, { width: subCols[1].width - 8, align: 'center' });
         rx += subCols[1].width;
 
-        // Passed
         doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text(`${sub.passCount || 0}`, rx + 4, currentY + 5, { width: subCols[2].width - 8, align: 'center' });
         rx += subCols[2].width;
 
-        // Failed
         const fCount = sub.failCount || 0;
         doc.fillColor(fCount > 0 ? '#B91C1C' : '#64748B').fontSize(7.5).font(fCount > 0 ? 'Helvetica-Bold' : 'Helvetica').text(`${fCount}`, rx + 4, currentY + 5, { width: subCols[3].width - 8, align: 'center' });
         rx += subCols[3].width;
 
-        // Pass %
         const sPassPct = sub.passPercentage || 0;
         doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(`${sPassPct.toFixed(1)}%`, rx + 4, currentY + 5, { width: subCols[4].width - 8, align: 'center' });
         rx += subCols[4].width;
 
-        // Highest
         doc.fillColor('#2563EB').fontSize(7.5).font('Helvetica-Bold').text(`${sub.highestMarks || 0}`, rx + 4, currentY + 5, { width: subCols[5].width - 8, align: 'center' });
         rx += subCols[5].width;
 
-        // Progress Bar inside cell
+        // Progress bar inside cell
         const barBoxX = rx + 6;
         const barBoxY = currentY + 6;
         const barBoxWidth = subCols[6].width - 12;
         const barBoxHeight = 8;
         
-        // Background track
         doc.roundedRect(barBoxX, barBoxY, barBoxWidth, barBoxHeight, 2).fill('#F1F5F9');
         doc.roundedRect(barBoxX, barBoxY, barBoxWidth, barBoxHeight, 2).stroke('#CBD5E1');
 
-        // Green filled portion
         const fillWidth = Math.max(0, Math.min(barBoxWidth, (barBoxWidth * sPassPct) / 100));
         if (fillWidth > 0) {
             const barColor = sPassPct >= 85 ? '#16A34A' : sPassPct >= 65 ? '#EAB308' : '#DC2626';
@@ -295,190 +362,186 @@ function generateResultPDF(result, students, res) {
         currentY += 20;
     });
 
-    currentY += 15;
-
-    // 6. Remedial / Backlog Candidate Summary (Top failed students if any)
-    const failedStudents = students.filter(s => !s.isPass);
-    if (failedStudents.length > 0 && currentY < pageBottom - 80) {
-        currentY = drawSectionHeader(`4. Remedial / Backlog Candidates Summary (${failedStudents.length} Students)`, currentY);
-
-        const failCols = [
-            { name: 'USN', width: 85, align: 'left' },
-            { name: 'Candidate Name', width: 140, align: 'left' },
-            { name: 'Failed Subject(s)', width: 210, align: 'left' },
-            { name: 'Backlogs', width: 80, align: 'center' }
-        ];
-
-        doc.roundedRect(margin, currentY, contentWidth, 16, 3).fill('#991B1B');
-        let fx = margin;
-        failCols.forEach(col => {
-            doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text(col.name, fx + 4, currentY + 4, { width: col.width - 8, align: col.align });
-            fx += col.width;
-        });
-        currentY += 16;
-
-        const showCount = Math.min(failedStudents.length, 5);
-        for (let i = 0; i < showCount; i++) {
-            const fs = failedStudents[i];
-            doc.rect(margin, currentY, contentWidth, 18).fill(i % 2 === 0 ? '#FFFFFF' : '#FEF2F2');
-            doc.rect(margin, currentY, contentWidth, 18).stroke('#FECACA');
-
-            let rfx = margin;
-            doc.fillColor('#7F1D1D').fontSize(7.5).font('Helvetica-Bold').text(fs.usn || '-', rfx + 4, currentY + 4, { width: failCols[0].width - 8 });
-            rfx += failCols[0].width;
-
-            doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(fs.name || '-', rfx + 4, currentY + 4, { width: failCols[1].width - 8 });
-            rfx += failCols[1].width;
-
-            // List failed subjects
-            const failedSubs = subjects.filter(sub => (fs.marks[sub.name] || 0) < 35).map(sub => getShortCode(sub.name)).join(', ');
-            doc.fillColor('#DC2626').fontSize(7).font('Helvetica').text(failedSubs || 'Multiple', rfx + 4, currentY + 4, { width: failCols[2].width - 8, ellipsis: true });
-            rfx += failCols[2].width;
-
-            const backCount = subjects.filter(sub => (fs.marks[sub.name] || 0) < 35).length;
-            doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text(`${backCount} Sub`, rfx + 4, currentY + 4, { width: failCols[3].width - 8, align: 'center' });
-
-            currentY += 18;
-        }
-
-        if (failedStudents.length > 5) {
-            doc.fillColor('#64748B').fontSize(7).font('Helvetica-Oblique').text(`* ... and ${failedStudents.length - 5} more candidates requiring re-examination (detailed in directory on next pages).`, margin + 4, currentY + 4);
-        }
-    }
-
     // ==========================================
-    // PAGE 2+: MASTER CANDIDATE MARKSHEET DIRECTORY
+    // PAGE 2: VISUAL ANALYTICS & CHARTS DOSSIER
     // ==========================================
     doc.addPage();
     currentY = margin;
 
-    // Calculate Dynamic Column Widths for Student Marksheet Table
-    const fixedWidths = {
-        rank: 26,
-        usn: 72,
-        name: 110,
-        total: 36,
-        pct: 38,
-        status: 44
-    };
-    const totalFixed = fixedWidths.rank + fixedWidths.usn + fixedWidths.name + fixedWidths.total + fixedWidths.pct + fixedWidths.status; // 326 pt
-    const subAvailWidth = contentWidth - totalFixed; // 189.28 pt
-    
-    const numSub = Math.max(1, subjects.length);
-    const subColWidth = subAvailWidth / numSub;
+    currentY = drawSectionHeader('4. Visual Analytics & Graphical Benchmarks', currentY);
 
-    // Helper: Draw Master Student Table Header
-    function drawMasterTableHeader(y) {
-        doc.roundedRect(margin, y, contentWidth, 20, 4).fill('#0F172A');
-        
-        let hx = margin;
-        
-        // Rank
-        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Rank', hx + 2, y + 6, { width: fixedWidths.rank - 4, align: 'center' });
-        hx += fixedWidths.rank;
+    const chartW = (contentWidth - 15) / 2; // ~250 pt
+    const chartH = 160;
 
-        // USN
-        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('USN', hx + 4, y + 6, { width: fixedWidths.usn - 8, align: 'left' });
-        hx += fixedWidths.usn;
+    // Row 1 Charts
+    if (chart1Buf) doc.image(chart1Buf, margin, currentY, { width: chartW, height: chartH });
+    if (chart2Buf) doc.image(chart2Buf, margin + chartW + 15, currentY, { width: chartW, height: chartH });
+    currentY += chartH + 15;
 
-        // Name
-        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Candidate Name', hx + 4, y + 6, { width: fixedWidths.name - 8, align: 'left' });
-        hx += fixedWidths.name;
+    // Row 2 Charts
+    if (chart3Buf) doc.image(chart3Buf, margin, currentY, { width: chartW, height: chartH });
+    if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, currentY, { width: chartW, height: chartH });
+    currentY += chartH + 20;
 
-        // Subject Headers
-        subjects.forEach(sub => {
-            const shortCode = getShortCode(sub.name);
-            doc.fillColor('#93C5FD').fontSize(6.5).font('Helvetica-Bold').text(shortCode, hx + 1, y + 6, { width: subColWidth - 2, align: 'center', ellipsis: true });
-            hx += subColWidth;
+    // ==========================================
+    // PAGE 3: TOP 5 PERFORMERS PER SUBJECT
+    // ==========================================
+    doc.addPage();
+    currentY = margin;
+
+    currentY = drawSectionHeader('5. Subject-Wise Academic Toppers (Top 5 per Subject)', currentY);
+
+    const subTopCols = [
+        { name: 'Rank', width: 35, align: 'center' },
+        { name: 'USN', width: 100, align: 'left' },
+        { name: 'Candidate Name', width: 220, align: 'left' },
+        { name: 'Marks Scored', width: 80, align: 'center' },
+        { name: 'Status', width: 80, align: 'center' }
+    ];
+
+    subjects.forEach((sub) => {
+        checkPageBreak(130, '5. Subject-Wise Academic Toppers (Continued)');
+
+        // Subject Title Banner
+        doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill('#0F172A');
+        doc.fillColor('#93C5FD').fontSize(8.5).font('Helvetica-Bold').text(`SUBJECT: ${sub.name}`, margin + 8, currentY + 4);
+        doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text(`Peak Score: ${sub.highestMarks} / 100`, margin + contentWidth - 140, currentY + 4, { width: 130, align: 'right' });
+        currentY += 18;
+
+        // Subtable Header
+        doc.rect(margin, currentY, contentWidth, 16).fill('#334155');
+        let stx = margin;
+        subTopCols.forEach(col => {
+            doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text(col.name, stx + 4, currentY + 4, { width: col.width - 8, align: col.align });
+            stx += col.width;
+        });
+        currentY += 16;
+
+        // Extract Top 5 for this subject
+        const top5Sub = students.slice()
+            .sort((a, b) => (Number(b.marks[sub.name]) || 0) - (Number(a.marks[sub.name]) || 0))
+            .slice(0, 5);
+
+        top5Sub.forEach((st, idx) => {
+            const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+            doc.rect(margin, currentY, contentWidth, 18).fill(rowBg);
+            doc.rect(margin, currentY, contentWidth, 18).stroke('#E2E8F0');
+
+            let rx = margin;
+
+            // Rank Badge
+            doc.fillColor('#2563EB').fontSize(7.5).font('Helvetica-Bold').text(`#${idx + 1}`, rx + 4, currentY + 4, { width: subTopCols[0].width - 8, align: 'center' });
+            rx += subTopCols[0].width;
+
+            // USN
+            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(st.usn || '-', rx + 4, currentY + 4, { width: subTopCols[1].width - 8 });
+            rx += subTopCols[1].width;
+
+            // Name
+            doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((st.name || '-').substring(0, 35), rx + 4, currentY + 4, { width: subTopCols[2].width - 8 });
+            rx += subTopCols[2].width;
+
+            // Subject Marks
+            const markVal = Number(st.marks[sub.name]) || 0;
+            doc.fillColor('#1E40AF').fontSize(8).font('Helvetica-Bold').text(`${markVal}`, rx + 4, currentY + 4, { width: subTopCols[3].width - 8, align: 'center' });
+            rx += subTopCols[3].width;
+
+            // Status Badge
+            const isSubPass = markVal >= 35;
+            doc.fillColor(isSubPass ? '#15803D' : '#B91C1C').fontSize(7.5).font('Helvetica-Bold').text(isSubPass ? 'PASS' : 'FAIL', rx + 4, currentY + 4, { width: subTopCols[4].width - 8, align: 'center' });
+
+            currentY += 18;
         });
 
-        // Total
-        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Total', hx + 2, y + 6, { width: fixedWidths.total - 4, align: 'center' });
-        hx += fixedWidths.total;
+        currentY += 12;
+    });
 
-        // %
-        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('%', hx + 2, y + 6, { width: fixedWidths.pct - 4, align: 'center' });
-        hx += fixedWidths.pct;
+    // ==========================================
+    // PAGE 4: SUBJECT-WISE FAILED CANDIDATES BREAKDOWN
+    // ==========================================
+    doc.addPage();
+    currentY = margin;
 
-        // Status
-        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Status', hx + 2, y + 6, { width: fixedWidths.status - 4, align: 'center' });
+    currentY = drawSectionHeader('6. Subject-Wise Failure Directory & Backlog Breakdown', currentY);
 
-        return y + 20;
-    }
+    const failCols = [
+        { name: 'S.No', width: 35, align: 'center' },
+        { name: 'USN', width: 100, align: 'left' },
+        { name: 'Candidate Name', width: 220, align: 'left' },
+        { name: 'Marks Scored', width: 80, align: 'center' },
+        { name: 'Status', width: 80, align: 'center' }
+    ];
 
-    // Page 2 Section Header
-    currentY = drawSectionHeader('5. Master Candidate Performance Directory & Grade Sheet', currentY);
-    currentY = drawMasterTableHeader(currentY);
+    subjects.forEach((sub) => {
+        const failedInSub = students.filter(s => (Number(s.marks[sub.name]) || 0) < 35);
 
-    const rowHeight = 18;
+        checkPageBreak(80, '6. Subject-Wise Failure Directory (Continued)');
 
-    students.forEach((st, idx) => {
-        // Page overflow check
-        if (currentY + rowHeight > pageBottom - 20) {
-            doc.addPage();
-            currentY = margin;
-            currentY = drawSectionHeader('5. Master Candidate Directory (Continued)', currentY);
-            currentY = drawMasterTableHeader(currentY);
+        // Subject Header Banner
+        const hasFailures = failedInSub.length > 0;
+        const subBannerBg = hasFailures ? '#7F1D1D' : '#14532D';
+        doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill(subBannerBg);
+        doc.fillColor('#FFFFFF').fontSize(8.5).font('Helvetica-Bold').text(`SUBJECT: ${sub.name}`, margin + 8, currentY + 4);
+        doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text(hasFailures ? `Failed Candidates: ${failedInSub.length}` : '100% Pass Clearance', margin + contentWidth - 160, currentY + 4, { width: 150, align: 'right' });
+        currentY += 18;
+
+        if (!hasFailures) {
+            doc.rect(margin, currentY, contentWidth, 20).fill('#F0FDF4');
+            doc.rect(margin, currentY, contentWidth, 20).stroke('#BBF7D0');
+            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('✔ All evaluated candidates successfully passed this subject.', margin + 12, currentY + 6);
+            currentY += 28;
+        } else {
+            // Subtable Header
+            doc.rect(margin, currentY, contentWidth, 16).fill('#991B1B');
+            let ftx = margin;
+            failCols.forEach(col => {
+                doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text(col.name, ftx + 4, currentY + 4, { width: col.width - 8, align: col.align });
+                ftx += col.width;
+            });
+            currentY += 16;
+
+            failedInSub.forEach((st, idx) => {
+                checkPageBreak(20, '6. Subject-Wise Failure Directory (Continued)');
+
+                const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#FEF2F2';
+                doc.rect(margin, currentY, contentWidth, 18).fill(rowBg);
+                doc.rect(margin, currentY, contentWidth, 18).stroke('#FECACA');
+
+                let rx = margin;
+
+                // S.No
+                doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text(`${idx + 1}`, rx + 4, currentY + 4, { width: failCols[0].width - 8, align: 'center' });
+                rx += failCols[0].width;
+
+                // USN
+                doc.fillColor('#7F1D1D').fontSize(7.5).font('Helvetica-Bold').text(st.usn || '-', rx + 4, currentY + 4, { width: failCols[1].width - 8 });
+                rx += failCols[1].width;
+
+                // Name
+                doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((st.name || '-').substring(0, 35), rx + 4, currentY + 4, { width: failCols[2].width - 8 });
+                rx += failCols[2].width;
+
+                // Marks
+                const markVal = Number(st.marks[sub.name]) || 0;
+                doc.fillColor('#DC2626').fontSize(8).font('Helvetica-Bold').text(`${markVal} / 100`, rx + 4, currentY + 4, { width: failCols[3].width - 8, align: 'center' });
+                rx += failCols[3].width;
+
+                // Status
+                doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text('FAIL', rx + 4, currentY + 4, { width: failCols[4].width - 8, align: 'center' });
+
+                currentY += 18;
+            });
+
+            currentY += 12;
         }
-
-        const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-        doc.rect(margin, currentY, contentWidth, rowHeight).fill(rowBg);
-        doc.rect(margin, currentY, contentWidth, rowHeight).stroke('#E2E8F0');
-
-        let rx = margin;
-
-        // Rank
-        doc.fillColor('#2563EB').fontSize(7).font('Helvetica-Bold').text(`${st.rank}`, rx + 2, currentY + 5, { width: fixedWidths.rank - 4, align: 'center' });
-        rx += fixedWidths.rank;
-
-        // USN
-        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(st.usn || '-', rx + 4, currentY + 5, { width: fixedWidths.usn - 8, align: 'left' });
-        rx += fixedWidths.usn;
-
-        // Name
-        doc.fillColor('#0F172A').fontSize(7).font('Helvetica-Bold').text((st.name || '-').substring(0, 24), rx + 4, currentY + 5, { width: fixedWidths.name - 8, align: 'left' });
-        rx += fixedWidths.name;
-
-        // Marks per subject
-        subjects.forEach(sub => {
-            const markVal = st.marks[sub.name] !== undefined ? st.marks[sub.name] : 0;
-            const isFailSub = markVal < 35;
-            doc.fillColor(isFailSub ? '#DC2626' : '#0F172A')
-               .fontSize(7)
-               .font(isFailSub ? 'Helvetica-Bold' : 'Helvetica')
-               .text(`${markVal}`, rx + 1, currentY + 5, { width: subColWidth - 2, align: 'center' });
-            rx += subColWidth;
-        });
-
-        // Total
-        doc.fillColor('#1E40AF').fontSize(7.5).font('Helvetica-Bold').text(`${st.totalMarks}`, rx + 2, currentY + 5, { width: fixedWidths.total - 4, align: 'center' });
-        rx += fixedWidths.total;
-
-        // %
-        doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(`${st.percentage}%`, rx + 2, currentY + 5, { width: fixedWidths.pct - 4, align: 'center' });
-        rx += fixedWidths.pct;
-
-        // Status Pill Badge
-        const isPass = st.isPass;
-        const badgeColor = isPass ? '#DCFCE7' : '#FEE2E2';
-        const badgeTextColor = isPass ? '#15803D' : '#B91C1C';
-        
-        doc.roundedRect(rx + 4, currentY + 3, fixedWidths.status - 8, 12, 3).fill(badgeColor);
-        doc.fillColor(badgeTextColor).fontSize(6.5).font('Helvetica-Bold').text(isPass ? 'PASS' : 'FAIL', rx + 4, currentY + 5, { width: fixedWidths.status - 8, align: 'center' });
-
-        currentY += rowHeight;
     });
 
     // ==========================================
     // ENDORSEMENT SIGNATURE BLOCK (Last Page)
     // ==========================================
-    if (currentY + 75 > pageBottom) {
-        doc.addPage();
-        currentY = margin + 30;
-    } else {
-        currentY += 25;
-    }
+    checkPageBreak(85);
 
+    currentY += 10;
     doc.rect(margin, currentY, contentWidth, 1).fill('#CBD5E1');
     currentY += 15;
 
@@ -498,7 +561,6 @@ function generateResultPDF(result, students, res) {
         const sx = margin + i * (sigBoxWidth + 10);
         doc.roundedRect(sx, currentY, sigBoxWidth, sigBoxHeight, 4).stroke('#CBD5E1');
 
-        // Dotted signature line
         doc.moveTo(sx + 10, currentY + 30).lineTo(sx + sigBoxWidth - 10, currentY + 30).dash(2, { space: 2 }).stroke('#94A3B8').undash();
 
         doc.fillColor('#64748B').fontSize(6.5).font('Helvetica').text(sig.label, sx + 8, currentY + 6, { width: sigBoxWidth - 16, align: 'center' });
@@ -514,18 +576,15 @@ function generateResultPDF(result, students, res) {
 
         const footerY = pageHeight - 30;
 
-        // Top line for footer
         doc.moveTo(margin, footerY - 5).lineTo(pageWidth - margin, footerY - 5).stroke('#E2E8F0');
 
-        // Left text
         doc.fillColor('#94A3B8').fontSize(7).font('Helvetica').text(
-            'College Result Analyzer System • Official Academic Record • Confidential Document',
+            'College Result Analyzer System • Official Executive Academic Record • Confidential',
             margin,
             footerY,
-            { width: 350, align: 'left' }
+            { width: 370, align: 'left' }
         );
 
-        // Right page number
         doc.fillColor('#475569').fontSize(7.5).font('Helvetica-Bold').text(
             `Page ${i + 1} of ${pages.count}`,
             pageWidth - margin - 100,
