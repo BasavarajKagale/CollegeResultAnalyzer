@@ -71,7 +71,7 @@ async function generateResultPDF(result, students, res) {
     const pageHeight = 841.89;
     const margin = 40;
     const contentWidth = pageWidth - margin * 2; // 515.28 pt
-    const pageBottom = pageHeight - margin - 35; // 766.89 pt
+    const pageBottom = pageHeight - margin - 40; // 761.89 pt
 
     let currentY = margin;
 
@@ -82,9 +82,18 @@ async function generateResultPDF(result, students, res) {
         return y + 24;
     }
 
-    // Helper: Dynamic Page Overflow Check (Strictly prevents blank pages)
+    // Helper: Force Start a New Page for major sections
+    function forceNewPage(sectionTitle = '') {
+        doc.addPage();
+        currentY = margin;
+        if (sectionTitle) {
+            currentY = drawSectionHeader(sectionTitle, currentY);
+        }
+    }
+
+    // Helper: Dynamic Page Overflow Check (ONLY breaks page when content actually overflows!)
     function checkPageBreak(neededHeight, titleOnNewPage = '') {
-        if (currentY + neededHeight > pageBottom && currentY > margin + 15) {
+        if (currentY + neededHeight > pageBottom) {
             doc.addPage();
             currentY = margin;
             if (titleOnNewPage) {
@@ -101,9 +110,9 @@ async function generateResultPDF(result, students, res) {
     const subjects = result.subjects || [];
     const totalStudentsCount = stats.totalStudents || students.length || 1;
 
-    // Calculate Y-axis upper limit with 25% buffer room so top legends and datalabels NEVER overlap!
+    // Calculate Y-axis upper limit with 30% buffer room so top labels NEVER touch top of chart
     const maxSubjectAppeared = Math.max(...subjects.map(s => (s.passCount || 0) + (s.failCount || 0)), 100);
-    const barYAxisMax = Math.ceil(maxSubjectAppeared * 1.25);
+    const barYAxisMax = Math.ceil(maxSubjectAppeared * 1.30);
 
     // Pre-calculate Grade Distribution
     let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failedCount = 0;
@@ -141,13 +150,12 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: false },
-                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                legend: { position: 'bottom', labels: { font: { size: 10, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
                     color: '#FFFFFF',
-                    font: { weight: 'bold', size: 12 },
-                    formatter: (val) => val > 50 ? val : ''
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (val) => val > 30 ? val : ''
                 }
             }
         }
@@ -173,19 +181,18 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: false },
-                legend: { position: 'bottom', labels: { font: { size: 10, weight: 'bold' }, color: '#334155' } },
+                legend: { position: 'bottom', labels: { font: { size: 9, weight: 'bold' }, color: '#334155' } },
                 datalabels: {
                     display: true,
                     color: '#FFFFFF',
-                    font: { weight: 'bold', size: 11 },
-                    formatter: (val) => val > 30 ? val : ''
+                    font: { weight: 'bold', size: 10 },
+                    formatter: (val) => val > 20 ? val : ''
                 }
             }
         }
     };
 
-    // Chart 4.3 Config (Bar Chart - Legend at BOTTOM so datalabels sit in clean top buffer)
+    // Chart 4.3 Config (Bar Chart - legend: { display: false } inside QuickChart to eliminate ANY legend overlap!)
     const chart3Config = {
         type: 'bar',
         data: {
@@ -197,48 +204,46 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
-                title: { display: false },
-                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                legend: { display: false }, // Legend rendered cleanly in PDFKit!
                 datalabels: {
                     display: true,
                     align: 'end',
                     anchor: 'end',
-                    font: { weight: 'bold', size: 9.5 },
+                    font: { weight: 'bold', size: 9 },
                     color: '#0F172A'
                 }
             },
             scales: {
-                y: { beginAtZero: true, max: barYAxisMax, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
-                x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
+                y: { beginAtZero: true, max: barYAxisMax, grid: { color: '#F1F5F9' }, ticks: { font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 9, weight: 'bold' } } }
             }
         }
     };
 
-    // Chart 4.4 Config (Line Chart - Legend at BOTTOM so datalabels sit in clean top buffer)
+    // Chart 4.4 Config (Line Chart - legend: { display: false } inside QuickChart to eliminate ANY legend overlap!)
     const chart4Config = {
         type: 'line',
         data: {
             labels: subjects.map(s => getShortCode(s.name)),
             datasets: [
-                { label: 'Peak Score in Subject', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.08)', fill: true, tension: 0.2, pointRadius: 5 },
-                { label: 'Batch Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.2, pointRadius: 5 }
+                { label: 'Peak Score in Subject', data: subjects.map(s => s.highestMarks), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.08)', fill: true, tension: 0.2, pointRadius: 4 },
+                { label: 'Batch Average Score', data: subjectAverages, borderColor: '#0D9488', backgroundColor: 'transparent', tension: 0.2, pointRadius: 4 }
             ]
         },
         options: {
             plugins: {
-                title: { display: false },
-                legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, color: '#334155' } },
+                legend: { display: false }, // Legend rendered cleanly in PDFKit!
                 datalabels: {
                     display: true,
                     align: 'top',
-                    font: { weight: 'bold', size: 9 },
+                    font: { weight: 'bold', size: 8.5 },
                     color: '#1E40AF',
                     formatter: (val) => val
                 }
             },
             scales: {
-                y: { min: 0, max: 115, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 10 } } },
-                x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } }
+                y: { min: 0, max: 115, grid: { color: '#F1F5F9' }, ticks: { stepSize: 20, font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 9, weight: 'bold' } } }
             }
         }
     };
@@ -355,7 +360,7 @@ async function generateResultPDF(result, students, res) {
 
     currentY += 16;
 
-    // 3. Subject-Wise Analytics Table (Pic 2 Table)
+    // 3. Subject-Wise Analytics Table
     currentY = drawSectionHeader('3. Subject-Wise Analytics & Performance Breakdown', currentY);
 
     const subCols = [
@@ -423,16 +428,13 @@ async function generateResultPDF(result, students, res) {
         currentY += 20;
     });
 
-    currentY += 16;
+    // ==========================================
+    // SECTION 4: VISUAL ANALYTICS & CHARTS DOSSIER (STARTS ON NEW PAGE 2)
+    // ==========================================
+    forceNewPage('4. Visual Analytics & Graphical Benchmarks');
 
-    // ==========================================
-    // SECTION 4: VISUAL ANALYTICS & CHARTS DOSSIER
-    // ==========================================
     const chartW = (contentWidth - 15) / 2; // ~250 pt
-    const chartH = 135; // Fixed compact height
-    const gridNeededHeight = 24 + 14 + chartH + 28 + 14 + chartH + 20; // ~335 pt
-
-    checkPageBreak(gridNeededHeight, '4. Visual Analytics & Graphical Benchmarks');
+    const chartH = 140;
 
     // Row 1 Header Names & Images
     const row1Y = currentY;
@@ -446,24 +448,32 @@ async function generateResultPDF(result, students, res) {
     if (chart1Buf) doc.image(chart1Buf, margin, row1ImgY, { width: chartW, height: chartH });
     if (chart2Buf) doc.image(chart2Buf, margin + chartW + 15, row1ImgY, { width: chartW, height: chartH });
 
-    // Generous 28pt padding gap between Row 1 images and Row 2 titles! ZERO OVERLAP!
+    // 28pt padding gap between Row 1 images and Row 2 titles! ZERO OVERLAP!
     currentY = row1ImgY + chartH + 28;
 
     // Row 2 Header Names & Images
     const row2Y = currentY;
+    
+    // Left Subtitle & PDFKit Legend Line for Figure 4.3 (ZERO overlap!)
     doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.3: Subject Pass vs Fail Comparison', margin, row2Y);
-    doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.4: Peak Score vs Average Benchmark', margin + chartW + 15, row2Y);
+    doc.fillColor('#16A34A').fontSize(7).font('Helvetica-Bold').text('■ Passed Candidates   ', margin, row2Y + 11, { continued: true });
+    doc.fillColor('#DC2626').fontSize(7).font('Helvetica-Bold').text('■ Failed Candidates');
 
-    const row2ImgY = row2Y + 14;
+    // Right Subtitle & PDFKit Legend Line for Figure 4.4 (ZERO overlap!)
+    doc.fillColor('#1E293B').fontSize(8.5).font('Helvetica-Bold').text('Figure 4.4: Peak Score vs Average Benchmark', margin + chartW + 15, row2Y);
+    doc.fillColor('#2563EB').fontSize(7).font('Helvetica-Bold').text('● Peak Score   ', margin + chartW + 15, row2Y + 11, { continued: true });
+    doc.fillColor('#0D9488').fontSize(7).font('Helvetica-Bold').text('● Batch Average');
+
+    const row2ImgY = row2Y + 22;
     if (chart3Buf) doc.image(chart3Buf, margin, row2ImgY, { width: chartW, height: chartH });
     if (chart4Buf) doc.image(chart4Buf, margin + chartW + 15, row2ImgY, { width: chartW, height: chartH });
 
     currentY = row2ImgY + chartH + 24;
 
     // ==========================================
-    // SECTION 5: TOP 5 PERFORMERS PER SUBJECT
+    // SECTION 5: TOP 5 PERFORMERS PER SUBJECT (STARTS ON NEW PAGE 3)
     // ==========================================
-    checkPageBreak(140, '5. Subject-Wise Academic Toppers (Top 5 per Subject)');
+    forceNewPage('5. Subject-Wise Academic Toppers (Top 5 per Subject)');
 
     const subTopCols = [
         { name: 'Rank', width: 35, align: 'center' },
@@ -523,9 +533,9 @@ async function generateResultPDF(result, students, res) {
     });
 
     // ==========================================
-    // SECTION 6: SUBJECT-WISE FAILED CANDIDATES BREAKDOWN
+    // SECTION 6: SUBJECT-WISE FAILED CANDIDATES BREAKDOWN (STARTS ON NEW PAGE 4)
     // ==========================================
-    checkPageBreak(100, '6. Subject-Wise Failure Directory & Backlog Breakdown');
+    forceNewPage('6. Subject-Wise Failure Directory & Backlog Breakdown');
 
     const failCols = [
         { name: 'S.No', width: 35, align: 'center' },
@@ -538,7 +548,7 @@ async function generateResultPDF(result, students, res) {
     subjects.forEach((sub) => {
         const failedInSub = students.filter(s => (Number(s.marks[sub.name]) || 0) < 35);
 
-        checkPageBreak(70, '6. Subject-Wise Failure Directory (Continued)');
+        checkPageBreak(50, '6. Subject-Wise Failure Directory (Continued)');
 
         const hasFailures = failedInSub.length > 0;
         const subBannerBg = hasFailures ? '#7F1D1D' : '#14532D';
@@ -561,9 +571,8 @@ async function generateResultPDF(result, students, res) {
             });
             currentY += 16;
 
-            // Show top failed candidates (up to 8 per subject for extreme compactness)
-            const showFailures = failedInSub.slice(0, 8);
-            showFailures.forEach((st, idx) => {
+            // List ALL failed students for this subject (No truncation!)
+            failedInSub.forEach((st, idx) => {
                 checkPageBreak(18, '6. Subject-Wise Failure Directory (Continued)');
 
                 const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#FEF2F2';
@@ -589,11 +598,6 @@ async function generateResultPDF(result, students, res) {
 
                 currentY += 18;
             });
-
-            if (failedInSub.length > 8) {
-                doc.fillColor('#64748B').fontSize(7).font('Helvetica-Oblique').text(`* ... and ${failedInSub.length - 8} more candidates failing in this subject.`, margin + 4, currentY + 4);
-                currentY += 14;
-            }
 
             currentY += 12;
         }
@@ -624,23 +628,29 @@ async function generateResultPDF(result, students, res) {
     });
 
     // ==========================================
-    // GLOBAL FOOTERS (NO PAGE NUMBERS AS REQUESTED)
+    // GLOBAL FOOTERS (SAFE FROM TRIPPED AUTOMATIC PAGE BREAKS)
     // ==========================================
-    const pages = doc.bufferedPageRange();
-    for (let i = 0; i < pages.count; i++) {
+    const range = doc.bufferedPageRange();
+
+    for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
 
-        const footerY = pageHeight - 30;
+        // Temporarily adjust bottom margin to 0 so footer text NEVER trips an auto page break!
+        const oldBottomMargin = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+
+        const footerY = pageHeight - 25;
 
         doc.moveTo(margin, footerY - 5).lineTo(pageWidth - margin, footerY - 5).stroke('#E2E8F0');
 
-        // Clean centered confidentiality footer without page numbers
         doc.fillColor('#94A3B8').fontSize(7.5).font('Helvetica').text(
             'College Result Analyzer System • Official Executive Academic Evaluation Report • Confidential',
             margin,
             footerY,
-            { width: contentWidth, align: 'center' }
+            { width: contentWidth, align: 'center', lineBreak: false }
         );
+
+        doc.page.margins.bottom = oldBottomMargin;
     }
 
     doc.end();
