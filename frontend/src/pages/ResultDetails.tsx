@@ -219,15 +219,15 @@ const ResultDetails = () => {
                                             if (resUpper === 'AB' || resUpper === 'ABSENT') {
                                                 isSubFail = true;
                                                 reasonTag = '(AB)';
-                                            } else if (det.ex !== undefined && det.ex > 0 && det.ex < 18) {
+                                            } else if (det.ex !== undefined && det.ex >= 0 && det.ex < 18) {
                                                 isSubFail = true;
                                                 reasonTag = '(EX)';
-                                            } else if (det.in !== undefined && det.in > 0 && det.in < 18) {
+                                            } else if (det.in !== undefined && det.in >= 0 && det.in < 18) {
                                                 isSubFail = true;
                                                 reasonTag = '(IN)';
                                             } else if (markVal < 35 || resUpper === 'F' || resUpper === 'FAIL') {
                                                 isSubFail = true;
-                                                reasonTag = '(TOT)';
+                                                reasonTag = (det.in !== undefined && det.in < 18) ? '(IN)' : '(EX)';
                                             }
 
                                             const displayText = isSubFail ? `${markVal}${reasonTag}` : `${markVal}`;
