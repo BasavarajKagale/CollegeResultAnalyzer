@@ -174,7 +174,7 @@ async function generateResultPDF(result, students, res) {
     const collegeNameText = result.collegeName || "KLE Society's KLE College of Engineering and Technology, Chikodi";
     doc.roundedRect(margin, currentY, contentWidth, 55, 6).fill('#0F172A');
     doc.fillColor('#93C5FD').fontSize(7.5).font('Helvetica-Bold').text('KLE SOCIETY ACADEMIC DOSSIER', margin + 16, currentY + 10);
-    doc.fillColor('#FFFFFF').fontSize(13.5).font('Helvetica-Bold').text(collegeNameText, margin + 16, currentY + 22, { width: contentWidth - 170, height: 26, lineBreak: false });
+    doc.fillColor('#FFFFFF').fontSize(10.5).font('Helvetica-Bold').text(collegeNameText, margin + 16, currentY + 20, { width: contentWidth - 140 });
 
     const uploadDateStr = new Date(result.uploadDate || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     doc.fillColor('#94A3B8').fontSize(8.5).font('Helvetica-Bold').text(`DATE: ${uploadDateStr}`, margin + contentWidth - 150, currentY + 18, { width: 135, align: 'right' });
@@ -337,9 +337,7 @@ async function generateResultPDF(result, students, res) {
         { key: 'failCount', label: 'Fail' },
         { key: 'abCount', label: 'AB' },
         { key: 'withHeldCount', label: 'With Held' },
-        { key: 'passPercentage', label: 'Percentage' },
-        { key: 'staffName', label: 'Staff Name' },
-        { key: 'staffSig', label: 'Staff Signature' }
+        { key: 'passPercentage', label: 'Percentage' }
     ];
 
     const overallRightBox = [
@@ -421,7 +419,8 @@ async function generateResultPDF(result, students, res) {
     });
     currentY += 18;
 
-    const top5Students = (students || []).slice(0, 5);
+    const sortedByMarks = [...(students || [])].sort((a, b) => (b.totalMarks || 0) - (a.totalMarks || 0));
+    const top5Students = sortedByMarks.slice(0, 5);
     top5Students.forEach((st, idx) => {
         checkPageBreak(18, 'Top 5 Academic Toppers (Continued)');
         const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
@@ -429,7 +428,7 @@ async function generateResultPDF(result, students, res) {
         doc.rect(margin, currentY, contentWidth, 18).stroke('#E2E8F0');
 
         let rx = margin;
-        doc.fillColor('#2563EB').fontSize(8).font('Helvetica-Bold').text(`#${st.rank || idx + 1}`, rx + 4, currentY + 5, { width: topperCols[0].width - 8, align: 'center' });
+        doc.fillColor('#2563EB').fontSize(8).font('Helvetica-Bold').text(`#${idx + 1}`, rx + 4, currentY + 5, { width: topperCols[0].width - 8, align: 'center' });
         rx += topperCols[0].width;
 
         doc.fillColor('#334155').fontSize(7.5).font('Helvetica-Bold').text(st.usn || '-', rx + 4, currentY + 5, { width: topperCols[1].width - 8 });

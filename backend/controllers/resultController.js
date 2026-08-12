@@ -161,7 +161,9 @@ const exportExcel = async (req, res) => {
                 const totalVal = det.total !== undefined ? det.total : (s.marks[sub.name] || 0);
                 const resVal = (det.result || '').toUpperCase() || (totalVal >= 35 && exVal >= 18 ? 'P' : 'F');
 
-                const isSubjectFail = resVal === 'F' || resVal === 'FAIL' || totalVal < 35 || exVal < 18;
+                const isSubjectFail = (resVal === 'F' || resVal === 'FAIL' || resVal === 'AB') || 
+                    (det.total !== undefined && det.total !== '' && !isNaN(det.total) && Number(det.total) < 35) || 
+                    (det.ex !== undefined && det.ex > 0 && Number(det.ex) < 18);
 
                 if (isSubjectFail) {
                     [currC, currC + 1, currC + 2, currC + 3].forEach(cNum => {

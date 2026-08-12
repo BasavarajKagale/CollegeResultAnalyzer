@@ -92,10 +92,10 @@ const ResultDetails = () => {
                         <Trophy size={24} /> Top 5 Academic Toppers
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        {(result.toppers || []).slice(0, 5).map((t: any, idx: number) => (
+                        {([...students].sort((a: any, b: any) => (b.totalMarks || 0) - (a.totalMarks || 0))).slice(0, 5).map((t: any, idx: number) => (
                             <div key={t._id || `${t.usn}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '0.8rem 1.2rem', borderRadius: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)', width: '25px' }}>#{t.rank || idx + 1}</span>
+                                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)', width: '25px' }}>#{idx + 1}</span>
                                     <div>
                                         <div className="nowrap" style={{ fontWeight: 600, fontSize: '0.95rem' }}>{t.name}</div>
                                         <div className="nowrap" style={{ fontSize: '0.75rem', color: '#888' }}>{t.usn}</div>
@@ -168,11 +168,10 @@ const ResultDetails = () => {
                 </div>
             </div>
 
-            {/* Detailed Candidate Table (Pic 5 format) */}
+            {/* Detailed Candidate Table */}
             <div className="card" style={{ padding: '0', overflow: 'hidden', width: '100%', marginBottom: '3rem' }}>
-                <div style={{ padding: '1.5rem 1.5rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem' }}>
-                    <h3 style={{ fontSize: '1.4rem' }}>Candidate Results & Performance Directory (Pic 5 Layout)</h3>
-                    <span style={{ fontSize: '0.75rem', color: '#888' }}>Failed subjects & remarks are highlighted in light red</span>
+                <div style={{ padding: '1.5rem 1.5rem 1rem' }}>
+                    <h3 style={{ fontSize: '1.4rem' }}>Candidate Results & Performance Directory</h3>
                 </div>
                 <div style={{ overflowX: 'auto', width: '100%' }}>
                     <table style={{ margin: '0', width: '100%', borderSpacing: '0', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
@@ -194,8 +193,8 @@ const ResultDetails = () => {
                                 ))}
                                 <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Total</th>
                                 <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Percentage</th>
-                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>No of Subjects Failed</th>
                                 <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Remark</th>
+                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>No of Subjects Failed</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -211,7 +210,10 @@ const ResultDetails = () => {
                                         <td className="nowrap" style={{ fontSize: '0.8rem', opacity: 0.85, padding: '0.6rem 0.5rem' }}>{s.usn}</td>
                                         {result.subjects.map((sub: any) => {
                                             const markVal = s.marks[sub.name] || 0;
-                                            const isSubFail = markVal < 35;
+                                            const det = s.subjectDetails?.[sub.name] || {};
+                                            const isSubFail = det.result 
+                                                ? (det.result.toUpperCase() === 'F' || det.result.toUpperCase() === 'FAIL' || det.result.toUpperCase() === 'AB') 
+                                                : (markVal < 35 || (det.ex !== undefined && det.ex > 0 && det.ex < 18));
                                             return (
                                                 <td 
                                                     key={sub.name} 
@@ -231,9 +233,6 @@ const ResultDetails = () => {
                                             {s.totalMarks}/{(result.subjects?.length || 1) * 100}
                                         </td>
                                         <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
-                                        <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
-                                            {failedCount}
-                                        </td>
                                         <td style={{ 
                                             textAlign: 'center', 
                                             padding: '0.6rem 0.5rem',
@@ -242,6 +241,9 @@ const ResultDetails = () => {
                                             fontWeight: 700
                                         }}>
                                             {s.remark || (s.isPass ? 'PASS' : 'FAIL')}
+                                        </td>
+                                        <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
+                                            {failedCount}
                                         </td>
                                     </tr>
                                 );
