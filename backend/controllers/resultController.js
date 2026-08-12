@@ -163,14 +163,13 @@ const exportExcel = async (req, res) => {
                 currC += 4;
             });
 
-            // Overall Remark Highlight
+            // Overall Remark Highlight (Fail: light red, Pass: default black)
             const remarkCell = addedRow.getCell(totalCol + 3);
             if (remarkCell.value === 'FAIL') {
                 remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 remarkCell.font = { color: { argb: 'FF991B1B' }, bold: true };
             } else {
-                remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
-                remarkCell.font = { color: { argb: 'FF16A34A' }, bold: true };
+                remarkCell.font = { color: { argb: 'FF000000' }, bold: false };
             }
         });
 
@@ -234,6 +233,38 @@ const exportExcel = async (req, res) => {
 
             row.font = { bold: true };
             row.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        // -------------------------------------------------------------
+        // APPLY SECTION & COLUMN BORDERS FOR SHEET 1
+        // -------------------------------------------------------------
+        const totalSheetCols = totalCol + 3;
+        studentSheet.eachRow((row) => {
+            for (let colNumber = 1; colNumber <= totalSheetCols; colNumber++) {
+                const cell = row.getCell(colNumber);
+
+                // Default thin border for all cells
+                const borderObj = {
+                    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+                };
+
+                // Section Boundary Borders (Medium Right Border)
+                // 1. After USN Column (col 3)
+                // 2. After each Subject block (col 7, 11, 15, 19...)
+                // 3. After Total, Percentage, No of Failures, Remark columns
+                const isUsnBoundary = colNumber === 3;
+                const isSubjectBoundary = (colNumber - 3) % 4 === 0 && colNumber >= 7 && colNumber < totalCol;
+                const isSummaryBoundary = colNumber >= totalCol && colNumber <= totalCol + 3;
+
+                if (isUsnBoundary || isSubjectBoundary || isSummaryBoundary) {
+                    borderObj.right = { style: 'medium', color: { argb: 'FF1E293B' } };
+                }
+
+                cell.border = borderObj;
+            }
         });
 
         // Adjust Column Widths
