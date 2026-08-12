@@ -64,7 +64,8 @@ const getResults = async (req, res) => {
 const getResultById = async (req, res) => {
     try {
         const result = await Result.findById(req.params.id);
-        const students = await Student.find({ resultId: req.params.id }).sort({ rank: 1 });
+        const students = await Student.find({ resultId: req.params.id });
+        students.sort((a, b) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' }));
         res.json({ result, students });
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
@@ -75,7 +76,9 @@ const exportExcel = async (req, res) => {
     try {
         const result = await Result.findById(req.params.id);
         if (!result) return res.status(404).json({ error: 'Result not found' });
-        const students = await Student.find({ resultId: req.params.id }).sort({ rank: 1 });
+        const students = await Student.find({ resultId: req.params.id });
+        // Arrange students as per USN ascending order
+        students.sort((a, b) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' }));
 
         const workbook = new ExcelJS.Workbook();
         const subjects = result.subjects || [];
@@ -129,7 +132,7 @@ const exportExcel = async (req, res) => {
             });
         });
 
-        // Add Student Data Rows (Pic 5 format)
+        // Add Student Data Rows (Pic 5 format) - Arranged by USN
         students.forEach((s, sIdx) => {
             const rowData = [sIdx + 1, s.name, s.usn];
             const detailsMap = s.subjectDetails || {};
@@ -149,12 +152,18 @@ const exportExcel = async (req, res) => {
             const addedRow = studentSheet.addRow(rowData);
             addedRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            // Cell Highlight Styling for Fails (Light Red Background)
+            // Cell Highlight Styling: Highlight ONLY failing subject cells (Total < 35 OR External EX < 18 OR Result == F)
             let currC = 4;
             subjects.forEach(sub => {
-                const resCell = addedRow.getCell(currC + 3);
-                const markCell = addedRow.getCell(currC + 2);
-                if (resCell.value === 'F' || (typeof markCell.value === 'number' && markCell.value < 35)) {
+                const det = detailsMap[sub.name] || {};
+                const inVal = det.in !== undefined ? det.in : 0;
+                const exVal = det.ex !== undefined ? det.ex : 0;
+                const totalVal = det.total !== undefined ? det.total : (s.marks[sub.name] || 0);
+                const resVal = (det.result || '').toUpperCase() || (totalVal >= 35 && exVal >= 18 ? 'P' : 'F');
+
+                const isSubjectFail = resVal === 'F' || resVal === 'FAIL' || totalVal < 35 || exVal < 18;
+
+                if (isSubjectFail) {
                     [currC, currC + 1, currC + 2, currC + 3].forEach(cNum => {
                         addedRow.getCell(cNum).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                         addedRow.getCell(cNum).font = { color: { argb: 'FF991B1B' }, bold: true };
@@ -163,9 +172,9 @@ const exportExcel = async (req, res) => {
                 currC += 4;
             });
 
-            // Overall Remark Highlight (Fail: light red, Pass: default black)
+            // Overall Remark Cell Highlight (Light Red ONLY for FAIL, default black for PASS)
             const remarkCell = addedRow.getCell(totalCol + 3);
-            if (remarkCell.value === 'FAIL') {
+            if (s.remark === 'FAIL' || !s.isPass || (s.failedSubjectsCount && s.failedSubjectsCount > 0)) {
                 remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 remarkCell.font = { color: { argb: 'FF991B1B' }, bold: true };
             } else {
@@ -406,7 +415,8 @@ const exportPDF = async (req, res) => {
         if (!result) {
             return res.status(404).json({ error: 'Result record not found' });
         }
-        const students = await Student.find({ resultId: req.params.id }).sort({ rank: 1 });
+        const students = await Student.find({ resultId: req.params.id });
+        students.sort((a, b) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' }));
 
         return generateResultPDF(result, students, res);
     } catch (err) {

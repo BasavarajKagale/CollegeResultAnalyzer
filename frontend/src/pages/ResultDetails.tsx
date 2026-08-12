@@ -199,7 +199,7 @@ const ResultDetails = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {students.map((s: any, idx: number) => {
+                            {[...students].sort((a: any, b: any) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' })).map((s: any, idx: number) => {
                                 const failedCount = s.failedSubjectsCount !== undefined ? s.failedSubjectsCount : (result.subjects.filter((sub: any) => (s.marks[sub.name] || 0) < 35).length);
                                 const isFailedOverall = !s.isPass || s.remark === 'FAIL';
                                 return (
