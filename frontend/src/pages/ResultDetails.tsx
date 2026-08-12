@@ -89,20 +89,22 @@ const ResultDetails = () => {
 
                 <div className="card">
                     <h3 style={{ color: 'var(--primary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                        <Trophy size={24} /> Academic Toppers
+                        <Trophy size={24} /> Top 5 Academic Toppers
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        {result.toppers.map((t: any, idx: number) => (
+                        {(result.toppers || []).slice(0, 5).map((t: any, idx: number) => (
                             <div key={t._id || `${t.usn}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '0.8rem 1.2rem', borderRadius: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)', width: '25px' }}>#{t.rank}</span>
+                                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)', width: '25px' }}>#{t.rank || idx + 1}</span>
                                     <div>
                                         <div className="nowrap" style={{ fontWeight: 600, fontSize: '0.95rem' }}>{t.name}</div>
                                         <div className="nowrap" style={{ fontSize: '0.75rem', color: '#888' }}>{t.usn}</div>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>{t.totalMarks}</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>
+                                        {t.totalMarks}/{(result.subjects?.length || 1) * 100}
+                                    </div>
                                     <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#fff' }}>{t.percentage}%</div>
                                 </div>
                             </div>
@@ -225,7 +227,9 @@ const ResultDetails = () => {
                                                 </td>
                                             );
                                         })}
-                                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '0.6rem 0.5rem' }}>{s.totalMarks}</td>
+                                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '0.6rem 0.5rem' }}>
+                                            {s.totalMarks}/{(result.subjects?.length || 1) * 100}
+                                        </td>
                                         <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
                                         <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
                                             {failedCount}

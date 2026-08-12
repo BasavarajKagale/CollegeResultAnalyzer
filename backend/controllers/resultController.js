@@ -35,6 +35,7 @@ const uploadResult = async (req, res) => {
 
         const result = new Result({
             filename: req.file.originalname,
+            collegeName: parsed.collegeName || "KLE Society's KLE College of Engineering and Technology, Chikodi",
             subjects: parsed.subjects,
             toppers: parsed.toppers,
             overallStats: parsed.overallStats

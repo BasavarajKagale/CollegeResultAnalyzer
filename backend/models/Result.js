@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const resultSchema = new mongoose.Schema({
     filename: String,
+    collegeName: String,
     uploadDate: { type: Date, default: Date.now },
     subjects: [{
         name: String,
