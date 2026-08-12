@@ -583,8 +583,11 @@ async function generateResultPDF(result, students, res) {
         }
     });
 
-    // Signature Endorsement Box
-    checkPageBreak(80, 'Verification & Signature Endorsement');
+    // Signature Endorsement Box - Positioned at bottom of page
+    const sigBoxY = pageHeight - 85;
+    if (currentY > sigBoxY) {
+        doc.addPage();
+    }
     const sigW = (contentWidth - 20) / 3;
     const sigs = [
         { title: 'Faculty Coordinator', label: 'Prepared By' },
@@ -594,10 +597,10 @@ async function generateResultPDF(result, students, res) {
 
     sigs.forEach((sig, i) => {
         const sx = margin + i * (sigW + 10);
-        doc.roundedRect(sx, currentY, sigW, 45, 4).stroke('#CBD5E1');
-        doc.moveTo(sx + 10, currentY + 28).lineTo(sx + sigW - 10, currentY + 28).dash(2, { space: 2 }).stroke('#94A3B8').undash();
-        doc.fillColor('#64748B').fontSize(6.5).font('Helvetica').text(sig.label, sx + 6, currentY + 5, { width: sigW - 12, align: 'center' });
-        doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(sig.title, sx + 6, currentY + 31, { width: sigW - 12, align: 'center' });
+        doc.roundedRect(sx, sigBoxY, sigW, 45, 4).stroke('#CBD5E1');
+        doc.moveTo(sx + 10, sigBoxY + 28).lineTo(sx + sigW - 10, sigBoxY + 28).dash(2, { space: 2 }).stroke('#94A3B8').undash();
+        doc.fillColor('#64748B').fontSize(6.5).font('Helvetica').text(sig.label, sx + 6, sigBoxY + 5, { width: sigW - 12, align: 'center' });
+        doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(sig.title, sx + 6, sigBoxY + 31, { width: sigW - 12, align: 'center' });
     });
 
     // Footers

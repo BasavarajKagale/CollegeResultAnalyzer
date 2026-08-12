@@ -152,7 +152,7 @@ const exportExcel = async (req, res) => {
             const addedRow = studentSheet.addRow(rowData);
             addedRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            // Cell Highlight Styling: Highlight ONLY failing subject cells (Total < 35 OR External EX < 18 OR Result == F)
+            // Cell Highlight Styling: Highlight ONLY specific failing sub-cells (Image 2 format)
             let currC = 4;
             subjects.forEach(sub => {
                 const det = detailsMap[sub.name] || {};
@@ -161,16 +161,38 @@ const exportExcel = async (req, res) => {
                 const totalVal = det.total !== undefined ? det.total : (s.marks[sub.name] || 0);
                 const resVal = (det.result || '').toUpperCase() || (totalVal >= 35 && exVal >= 18 ? 'P' : 'F');
 
-                const isSubjectFail = (resVal === 'F' || resVal === 'FAIL' || resVal === 'AB') || 
-                    (det.total !== undefined && det.total !== '' && !isNaN(det.total) && Number(det.total) < 35) || 
-                    (det.ex !== undefined && det.ex > 0 && Number(det.ex) < 18);
+                const isInFail = inVal > 0 && inVal < 18;
+                const isExFail = exVal > 0 && exVal < 18;
+                const isTotalFail = totalVal < 35 || isExFail || isInFail || resVal === 'F' || resVal === 'FAIL';
+                const isResFail = resVal === 'F' || resVal === 'FAIL' || resVal === 'AB';
 
-                if (isSubjectFail) {
-                    [currC, currC + 1, currC + 2, currC + 3].forEach(cNum => {
-                        addedRow.getCell(cNum).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-                        addedRow.getCell(cNum).font = { color: { argb: 'FF991B1B' }, bold: true };
-                    });
+                const lightRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+                const darkRedFont = { color: { argb: 'FF991B1B' }, bold: true };
+
+                // 1. IN Cell (currC) - Highlight ONLY if IN failed
+                if (isInFail) {
+                    addedRow.getCell(currC).fill = lightRedFill;
+                    addedRow.getCell(currC).font = darkRedFont;
                 }
+
+                // 2. EX Cell (currC + 1) - Highlight ONLY if EX failed (< 18)
+                if (isExFail) {
+                    addedRow.getCell(currC + 1).fill = lightRedFill;
+                    addedRow.getCell(currC + 1).font = darkRedFont;
+                }
+
+                // 3. Total Cell (currC + 2) - Highlight if total < 35 or subject failed
+                if (isTotalFail) {
+                    addedRow.getCell(currC + 2).fill = lightRedFill;
+                    addedRow.getCell(currC + 2).font = darkRedFont;
+                }
+
+                // 4. Result Cell (currC + 3) - Highlight if Result is F/FAIL/AB
+                if (isResFail) {
+                    addedRow.getCell(currC + 3).fill = lightRedFill;
+                    addedRow.getCell(currC + 3).font = darkRedFont;
+                }
+
                 currC += 4;
             });
 

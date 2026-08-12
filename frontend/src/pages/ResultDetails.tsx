@@ -209,14 +209,33 @@ const ResultDetails = () => {
                                         <td className="nowrap" style={{ fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.name}</td>
                                         <td className="nowrap" style={{ fontSize: '0.8rem', opacity: 0.85, padding: '0.6rem 0.5rem' }}>{s.usn}</td>
                                         {result.subjects.map((sub: any) => {
-                                            const markVal = s.marks[sub.name] || 0;
+                                            const markVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
                                             const det = s.subjectDetails?.[sub.name] || {};
-                                            const isSubFail = det.result 
-                                                ? (det.result.toUpperCase() === 'F' || det.result.toUpperCase() === 'FAIL' || det.result.toUpperCase() === 'AB') 
-                                                : (markVal < 35 || (det.ex !== undefined && det.ex > 0 && det.ex < 18));
+                                            const resUpper = (det.result || '').toUpperCase();
+
+                                            let isSubFail = false;
+                                            let reasonTag = '';
+
+                                            if (resUpper === 'AB' || resUpper === 'ABSENT') {
+                                                isSubFail = true;
+                                                reasonTag = ' (AB)';
+                                            } else if (det.ex !== undefined && det.ex > 0 && det.ex < 18) {
+                                                isSubFail = true;
+                                                reasonTag = ' (EX)';
+                                            } else if (det.in !== undefined && det.in > 0 && det.in < 18) {
+                                                isSubFail = true;
+                                                reasonTag = ' (IN)';
+                                            } else if (markVal < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                                                isSubFail = true;
+                                                reasonTag = ' (TOT)';
+                                            }
+
+                                            const displayText = isSubFail ? `${markVal}${reasonTag}` : `${markVal}`;
+
                                             return (
                                                 <td 
                                                     key={sub.name} 
+                                                    title={isSubFail ? `Failed due to ${reasonTag.trim().replace('(', '').replace(')', '')}` : `Passed ${sub.name}`}
                                                     style={{ 
                                                         textAlign: 'center', 
                                                         padding: '0.6rem 0.4rem',
@@ -225,7 +244,7 @@ const ResultDetails = () => {
                                                         fontWeight: isSubFail ? 700 : 400
                                                     }}
                                                 >
-                                                    {markVal}
+                                                    {displayText}
                                                 </td>
                                             );
                                         })}
