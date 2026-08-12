@@ -78,30 +78,40 @@ function parseSpreadsheetBuffer(buffer) {
 }
 
 /**
- * Core Matrix Parsing Engine for Excel & CSV
+ * Core Matrix Parsing Engine for Excel & CSV (Handles arbitrary title banner rows & formats)
  */
 function parseMatrix(matrix) {
     // 1. Clean matrix values
     const cleanMatrix = matrix.map(row => 
         (Array.isArray(row) ? row : []).map(cell => 
-            cell === null || cell === undefined ? '' : String(cell).trim()
+            cell === null || cell === undefined ? '' : String(cell).replace(/\s+/g, ' ').trim()
         )
     );
 
-    // 2. Find Header Row(s)
+    // 2. Locate Header Row dynamically (scans across all initial rows to bypass college banners)
     let headerRowIdx = -1;
-    let maxScore = -1;
+    let maxScore = -500;
 
-    for (let r = 0; r < Math.min(cleanMatrix.length, 25); r++) {
+    for (let r = 0; r < Math.min(cleanMatrix.length, 50); r++) {
         const row = cleanMatrix[r];
         let score = 0;
         
         row.forEach(cell => {
             const lower = cell.toLowerCase();
-            if (/usn|roll|reg|register|seat|id|enrollment/i.test(lower)) score += 10;
-            if (/name|student|candidate/i.test(lower)) score += 10;
-            if (/^\d{2}[A-Za-z]{2,3}\d{2,3}/.test(cell) || EXCLUDED_HEADERS.includes(lower)) score += 5;
-            if (cell.length > 0) score += 1;
+            if (/^usn$|^roll\s*no$|^reg\s*no$|^register\s*no$|^seat\s*no$/i.test(lower)) score += 100;
+            else if (/usn|roll|reg/i.test(lower)) score += 30;
+
+            if (/^std\.?\s*name$|^student\s*name$|^candidate\s*name$|^name$/i.test(lower)) score += 100;
+            else if (/name|student|candidate/i.test(lower)) score += 30;
+
+            if (/^sl\.?\s*no$|^s\.?\s*no$|^serial\s*no$/i.test(lower)) score += 50;
+
+            // Subject code header matches (e.g. BCS401, 21CS31)
+            if (/^[A-Z]{2,4}\d{3,4}[A-Z]?$/i.test(cell)) score += 20;
+
+            if (VTU_USN_REGEX.test(cell) || GENERIC_USN_REGEX.test(cell)) {
+                score -= 100; // Heavy penalty for data rows containing student USN numbers
+            }
         });
 
         if (score > maxScore) {
@@ -110,98 +120,146 @@ function parseMatrix(matrix) {
         }
     }
 
+    if (headerRowIdx === -1 || maxScore < 20) {
+        // Fallback search: find first row with text "USN" or "Std. Name"
+        for (let r = 0; r < Math.min(cleanMatrix.length, 50); r++) {
+            const row = cleanMatrix[r];
+            if (row.some(cell => /usn|std\.?\s*name|student\s*name/i.test(cell))) {
+                headerRowIdx = r;
+                break;
+            }
+        }
+    }
+
     if (headerRowIdx === -1) {
         headerRowIdx = 0;
     }
 
-    // Combine current header row with next row if row+1 has subject titles / multiline subheaders
-    let combinedHeaders = [...cleanMatrix[headerRowIdx]];
-    let nextRowIsSubheader = false;
-    
-    if (headerRowIdx + 1 < cleanMatrix.length) {
-        const nextRow = cleanMatrix[headerRowIdx + 1];
-        // Check if next row looks like subheaders (e.g. Mathematics under 21CS31)
-        const hasTextInNext = nextRow.some(cell => cell.length > 0 && isNaN(cell));
-        const firstCellIsData = VTU_USN_REGEX.test(nextRow[0] || '') || VTU_USN_REGEX.test(nextRow[1] || '');
-        
-        if (hasTextInNext && !firstCellIsData) {
-            nextRowIsSubheader = true;
-            for (let c = 0; c < Math.max(combinedHeaders.length, nextRow.length); c++) {
-                const top = (combinedHeaders[c] || '').replace(/\s+/g, ' ').trim();
-                const bot = (nextRow[c] || '').replace(/\s+/g, ' ').trim();
-                if (top && bot && top.toLowerCase() !== bot.toLowerCase()) {
-                    combinedHeaders[c] = `${top} ${bot}`;
-                } else if (bot) {
-                    combinedHeaders[c] = bot;
-                } else {
-                    combinedHeaders[c] = top;
+    // 3. Check for Sub-header Row (e.g., IN, EX, T, R under subject codes in Pic 5 format)
+    let subheaderRowIdx = -1;
+    let isPic5SubheaderFormat = false;
+
+    for (let offset = 1; offset <= 2; offset++) {
+        const testIdx = headerRowIdx + offset;
+        if (testIdx < cleanMatrix.length) {
+            const testRow = cleanMatrix[testIdx];
+            let subCount = 0;
+            testRow.forEach(cell => {
+                const lower = cell.toLowerCase();
+                if (lower === 'in' || lower === 'ex' || lower === 'em' || lower === 't' || lower === 'r' || lower === 'tot') {
+                    subCount++;
                 }
+            });
+            if (subCount >= 3) {
+                subheaderRowIdx = testIdx;
+                isPic5SubheaderFormat = true;
+                break;
             }
         }
     }
 
-    const dataStartIdx = headerRowIdx + (nextRowIsSubheader ? 2 : 1);
+    const row1 = cleanMatrix[headerRowIdx] || [];
+    const row2 = isPic5SubheaderFormat ? cleanMatrix[subheaderRowIdx] : [];
+    const dataStartIdx = isPic5SubheaderFormat ? subheaderRowIdx + 1 : headerRowIdx + 1;
 
-    // 3. Map Columns
+    // 4. Map USN and Name Column Indices
     let usnCol = -1;
     let nameCol = -1;
+    let slNoCol = -1;
 
-    combinedHeaders.forEach((header, colIdx) => {
-        const cleanedHeader = header.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-        const lower = cleanedHeader.toLowerCase();
-
+    row1.forEach((header, colIdx) => {
+        const lower = (header || '').toLowerCase();
         if (usnCol === -1 && /usn|roll|reg|register|seat|id|enrollment/i.test(lower)) {
             usnCol = colIdx;
-        } else if (nameCol === -1 && /name|student|candidate/i.test(lower)) {
+        } else if (nameCol === -1 && /name|student|candidate|std\.?\s*name/i.test(lower)) {
             nameCol = colIdx;
+        } else if (slNoCol === -1 && /sl\.?\s*no|s\.?\s*no|serial/i.test(lower)) {
+            slNoCol = colIdx;
         }
     });
 
-    // Fallback: Check data rows to auto-detect USN & Name columns if headers didn't match
+    // Fallback: Scan data rows to locate USN & Name columns if headers were ambiguous
     if (usnCol === -1 || nameCol === -1) {
-        for (let c = 0; c < combinedHeaders.length; c++) {
-            let usnMatchCount = 0;
-            let nameMatchCount = 0;
-            let sampleCount = 0;
-
-            for (let r = dataStartIdx; r < Math.min(cleanMatrix.length, dataStartIdx + 10); r++) {
+        for (let c = 0; c < Math.max(row1.length, 10); c++) {
+            let usnMatches = 0;
+            let nameMatches = 0;
+            let count = 0;
+            for (let r = dataStartIdx; r < Math.min(cleanMatrix.length, dataStartIdx + 15); r++) {
                 const val = cleanMatrix[r][c] || '';
                 if (!val) continue;
-                sampleCount++;
-                if (VTU_USN_REGEX.test(val) || GENERIC_USN_REGEX.test(val)) usnMatchCount++;
-                else if (/[A-Za-z]{3,}\s+[A-Za-z]{2,}/.test(val) && isNaN(val)) nameMatchCount++;
+                count++;
+                if (VTU_USN_REGEX.test(val) || GENERIC_USN_REGEX.test(val)) usnMatches++;
+                else if (/[A-Za-z]{3,}\s+[A-Za-z]{2,}/.test(val) && isNaN(val)) nameMatches++;
             }
-
-            if (sampleCount > 0) {
-                if (usnCol === -1 && usnMatchCount / sampleCount >= 0.4) usnCol = c;
-                if (nameCol === -1 && nameMatchCount / sampleCount >= 0.4) nameCol = c;
+            if (count > 0) {
+                if (usnCol === -1 && usnMatches / count >= 0.3) usnCol = c;
+                if (nameCol === -1 && nameMatches / count >= 0.3) nameCol = c;
             }
         }
     }
 
-    // Default column fallbacks if still not found
-    if (usnCol === -1 && nameCol !== 0) usnCol = 1;
-    if (nameCol === -1) nameCol = 0;
+    if (usnCol === -1) usnCol = (nameCol === 1 ? 2 : 1);
+    if (nameCol === -1) nameCol = (usnCol === 1 ? 2 : 1);
 
-    // Map subject columns
-    const subjectCols = [];
-    combinedHeaders.forEach((header, colIdx) => {
-        if (colIdx === usnCol || colIdx === nameCol) return;
+    // 5. Build Subject Column Blocks
+    const subjectBlocks = [];
 
-        const cleanedHeader = header.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-        const lower = cleanedHeader.toLowerCase();
+    if (isPic5SubheaderFormat) {
+        let currentSubjectCode = '';
+        let currentBlock = null;
 
-        if (EXCLUDED_HEADERS.some(ex => lower === ex || lower.startsWith(ex))) return;
+        for (let c = 0; c < Math.max(row1.length, row2.length); c++) {
+            if (c === usnCol || c === nameCol || c === slNoCol) continue;
+            const topVal = (row1[c] || '').trim();
+            const botVal = (row2[c] || '').trim().toLowerCase();
 
-        if (cleanedHeader.length > 0) {
-            subjectCols.push({
-                index: colIdx,
-                name: formatSubjectHeader(cleanedHeader)
-            });
+            if (/sl\.?\s*no|std\.?\s*name|usn|total|percentage|remark/i.test(topVal)) continue;
+
+            if (topVal && topVal.length >= 2 && !EXCLUDED_HEADERS.some(ex => topVal.toLowerCase().startsWith(ex))) {
+                if (!currentBlock || currentBlock.code !== topVal) {
+                    currentSubjectCode = formatSubjectHeader(topVal);
+                    currentBlock = {
+                        code: currentSubjectCode,
+                        inCol: -1,
+                        exCol: -1,
+                        totalCol: -1,
+                        resultCol: -1
+                    };
+                    subjectBlocks.push(currentBlock);
+                }
+            }
+
+            if (currentBlock) {
+                if (botVal === 'in') currentBlock.inCol = c;
+                else if (botVal === 'ex' || botVal === 'em') currentBlock.exCol = c;
+                else if (botVal === 't' || botVal === 'tot') currentBlock.totalCol = c;
+                else if (botVal === 'r' || botVal === 'result') currentBlock.resultCol = c;
+            }
         }
-    });
+    } else {
+        // Standard 1-column per subject layout
+        row1.forEach((header, colIdx) => {
+            if (colIdx === usnCol || colIdx === nameCol || colIdx === slNoCol) return;
+            const cleanedHeader = header.trim();
+            const lower = cleanedHeader.toLowerCase();
+            if (EXCLUDED_HEADERS.some(ex => lower === ex || lower.startsWith(ex))) return;
+            if (cleanedHeader.length > 0) {
+                subjectBlocks.push({
+                    code: formatSubjectHeader(cleanedHeader),
+                    inCol: -1,
+                    exCol: -1,
+                    totalCol: colIdx,
+                    resultCol: -1
+                });
+            }
+        });
+    }
 
-    // 4. Parse Student Data Rows
+    if (subjectBlocks.length === 0) {
+        throw new Error('No valid subject columns found in the uploaded file.');
+    }
+
+    // 6. Extract Candidate Records (Scans row dynamically for USN & Name)
     const rawStudents = [];
 
     for (let r = dataStartIdx; r < cleanMatrix.length; r++) {
@@ -211,40 +269,83 @@ function parseMatrix(matrix) {
         let usnVal = (row[usnCol] || '').trim();
         let nameVal = (row[nameCol] || '').trim();
 
-        // Scan row if USN not found in mapped column
-        if (!VTU_USN_REGEX.test(usnVal) && !GENERIC_USN_REGEX.test(usnVal)) {
-            for (let c = 0; c < row.length; c++) {
-                if (VTU_USN_REGEX.test(row[c]) || GENERIC_USN_REGEX.test(row[c])) {
-                    usnVal = row[c].trim();
-                    break;
+        // Scan row cells 0-5 to find actual USN if mapped column is shifted
+        let foundUsnColInRow = -1;
+        for (let c = 0; c < Math.min(row.length, 6); c++) {
+            const cellVal = (row[c] || '').trim();
+            if (VTU_USN_REGEX.test(cellVal) || GENERIC_USN_REGEX.test(cellVal)) {
+                usnVal = cellVal;
+                foundUsnColInRow = c;
+                break;
+            }
+        }
+
+        // Skip non-student rows (banners, headers, bottom statistics rows)
+        if (!usnVal) continue; // Must have a valid student USN
+
+        if (/total|average|appeared|fcd|fc|sc|pass|fail|signature|staff|percentage|result\s*sheet|annouced/i.test(nameVal) ||
+            /total|average|appeared|fcd|fc|sc|pass|fail|signature|staff|percentage|result\s*sheet|annouced/i.test(usnVal)) {
+            continue;
+        }
+
+        // Extract student name if missing from mapped column
+        if (!nameVal || nameVal === usnVal || /^\d+$/.test(nameVal)) {
+            for (let c = 0; c < Math.min(row.length, 6); c++) {
+                if (c === foundUsnColInRow) continue;
+                const cellVal = (row[c] || '').trim();
+                if (cellVal && isNaN(cellVal) && cellVal.length >= 3 && !VTU_USN_REGEX.test(cellVal) && !GENERIC_USN_REGEX.test(cellVal)) {
+                    if (!/sl\.?\s*no|usn|total/i.test(cellVal)) {
+                        nameVal = cellVal;
+                        break;
+                    }
                 }
             }
         }
 
-        // Skip rows that look like summary, header repeats, or non-student rows
-        if (/total|average|pass|fail|signature|page|students/i.test(nameVal) || 
-            /total|average|pass|fail|signature|page|students/i.test(usnVal)) {
-            continue;
-        }
-
-        if (!usnVal && !nameVal) continue;
-
         const marks = {};
-        subjectCols.forEach(sub => {
-            const rawVal = row[sub.index];
-            let num = parseInt(rawVal, 10);
-            if (isNaN(num)) num = 0;
-            marks[sub.name] = num;
+        const subjectDetails = {};
+
+        subjectBlocks.forEach(sub => {
+            let inVal = sub.inCol !== -1 ? parseInt(row[sub.inCol], 10) : 0;
+            if (isNaN(inVal)) inVal = 0;
+
+            let exVal = sub.exCol !== -1 ? parseInt(row[sub.exCol], 10) : 0;
+            if (isNaN(exVal)) exVal = 0;
+
+            let totalVal = sub.totalCol !== -1 ? parseInt(row[sub.totalCol], 10) : NaN;
+            if (isNaN(totalVal)) {
+                totalVal = inVal + exVal;
+            }
+
+            let resultVal = sub.resultCol !== -1 ? (row[sub.resultCol] || '').trim().toUpperCase() : '';
+            if (!resultVal) {
+                resultVal = totalVal >= 35 ? 'P' : 'F';
+            } else if (resultVal === 'PASS') {
+                resultVal = 'P';
+            } else if (resultVal === 'FAIL') {
+                resultVal = 'F';
+            } else if (resultVal === 'ABSENT' || resultVal === 'ABS') {
+                resultVal = 'AB';
+            }
+
+            marks[sub.code] = totalVal;
+            subjectDetails[sub.code] = {
+                in: inVal,
+                ex: exVal,
+                total: totalVal,
+                result: resultVal
+            };
         });
 
         rawStudents.push({
             name: nameVal || 'Unknown',
-            usn: usnVal || `TEMP_${r}`,
-            marks
+            usn: usnVal,
+            marks,
+            subjectDetails
         });
     }
 
-    return buildResultDocument(rawStudents, subjectCols.map(s => s.name));
+    return buildResultDocument(rawStudents, subjectBlocks.map(s => s.code));
 }
 
 /**
@@ -489,48 +590,101 @@ function buildResultDocument(rawStudents, subjectNames) {
         throw new Error('No valid student records detected in the uploaded file.');
     }
 
-    let totalPassCount = 0;
     const subjectStatsMap = {};
-
     subjectNames.forEach(sub => {
         subjectStatsMap[sub] = {
             name: sub,
-            passCount: 0,
+            appearedCount: 0,
+            fcdCount: 0,
+            fcCount: 0,
+            scCount: 0,
+            passClassCount: 0,
+            abCount: 0,
+            withHeldCount: 0,
             failCount: 0,
+            totalPassCount: 0,
             passPercentage: 0,
             highestMarks: 0
         };
     });
 
+    let overallFCD = 0;
+    let overallFC = 0;
+    let overallSC = 0;
+    let overallPassClass = 0;
+    let overallTotalPass = 0;
+
     const studentDocs = rawStudents.map(student => {
         let studentTotal = 0;
-        let isPass = true;
+        let failedSubjectsCount = 0;
+        const detailsMap = student.subjectDetails || {};
 
         subjectNames.forEach(sub => {
-            const mark = Number(student.marks[sub]) || 0;
+            const stat = subjectStatsMap[sub];
+            const detail = detailsMap[sub] || {
+                in: 0,
+                ex: 0,
+                total: Number(student.marks[sub]) || 0,
+                result: (Number(student.marks[sub]) || 0) >= 35 ? 'P' : 'F'
+            };
+
+            const mark = Number(detail.total) || 0;
+            const res = (detail.result || '').toUpperCase();
             studentTotal += mark;
 
-            const stat = subjectStatsMap[sub];
-            if (mark >= 35) { // Standard passing threshold
-                stat.passCount++;
-            } else {
-                stat.failCount++;
-                isPass = false;
-            }
+            stat.appearedCount++;
             if (mark > stat.highestMarks) stat.highestMarks = mark;
+
+            if (res === 'AB' || res === 'A') {
+                stat.abCount++;
+                failedSubjectsCount++;
+            } else if (res === 'W' || res === 'WH' || res === 'WITH HELD' || res === 'WITHHELD') {
+                stat.withHeldCount++;
+                failedSubjectsCount++;
+            } else if (res === 'F' || mark < 35) {
+                stat.failCount++;
+                failedSubjectsCount++;
+            } else {
+                // Pass category breakdown per subject
+                if (mark >= 70) stat.fcdCount++;
+                else if (mark >= 60) stat.fcCount++;
+                else if (mark >= 50) stat.scCount++;
+                else stat.passClassCount++;
+            }
         });
 
-        if (isPass) totalPassCount++;
+        // Subject total pass count per subject = FCD + FC + SC + PassClass
+        subjectNames.forEach(sub => {
+            const stat = subjectStatsMap[sub];
+            stat.totalPassCount = stat.fcdCount + stat.fcCount + stat.scCount + stat.passClassCount;
+            stat.passPercentage = stat.appearedCount > 0 ? (stat.totalPassCount / stat.appearedCount) * 100 : 0;
+        });
 
-        const percentage = (studentTotal / (subjectNames.length * 100)) * 100;
+        const maxTotal = subjectNames.length * 100;
+        const percentage = maxTotal > 0 ? parseFloat(((studentTotal / maxTotal) * 100).toFixed(2)) : 0;
+
+        // Overall passing criteria: 0 failed subjects AND percentage >= 40%
+        const isPass = failedSubjectsCount === 0 && percentage >= 40.0;
+        const remark = isPass ? 'PASS' : 'FAIL';
+
+        if (isPass) {
+            overallTotalPass++;
+            if (percentage >= 70.0) overallFCD++;
+            else if (percentage >= 60.0) overallFC++;
+            else if (percentage >= 50.0) overallSC++;
+            else overallPassClass++;
+        }
 
         return {
             name: student.name,
             usn: student.usn,
             marks: student.marks,
+            subjectDetails: detailsMap,
             totalMarks: studentTotal,
-            percentage: parseFloat(percentage.toFixed(2)),
-            isPass: isPass
+            percentage: percentage,
+            failedSubjectsCount: failedSubjectsCount,
+            isPass: isPass,
+            remark: remark
         };
     });
 
@@ -540,12 +694,8 @@ function buildResultDocument(rawStudents, subjectNames) {
         s.rank = idx + 1;
     });
 
-    // Subject pass percentages
-    const subjectStats = subjectNames.map(sub => {
-        const stat = subjectStatsMap[sub];
-        stat.passPercentage = rawStudents.length > 0 ? (stat.passCount / rawStudents.length) * 100 : 0;
-        return stat;
-    });
+    // Subject stats array
+    const subjectStats = subjectNames.map(sub => subjectStatsMap[sub]);
 
     // Toppers
     const toppers = studentDocs.slice(0, 3).map(s => ({
@@ -556,12 +706,20 @@ function buildResultDocument(rawStudents, subjectNames) {
         percentage: s.percentage
     }));
 
-    // Overall Batch Statistics
+    // Overall Batch Statistics (matching Pic 1 & Pic 2)
+    const totalStudents = rawStudents.length;
+    const overallFail = totalStudents - overallTotalPass;
+
     const overallStats = {
-        totalStudents: rawStudents.length,
-        passCount: totalPassCount,
-        failCount: rawStudents.length - totalPassCount,
-        passPercentage: rawStudents.length > 0 ? (totalPassCount / rawStudents.length) * 100 : 0
+        totalStudents: totalStudents,
+        appearedCount: totalStudents,
+        fcdCount: overallFCD,
+        fcCount: overallFC,
+        scCount: overallSC,
+        passClassCount: overallPassClass,
+        failCount: overallFail,
+        passCount: overallTotalPass,
+        passPercentage: totalStudents > 0 ? parseFloat(((overallTotalPass / totalStudents) * 100).toFixed(2)) : 0
     };
 
     return {

@@ -143,10 +143,10 @@ const ResultDetails = () => {
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8rem' }}>
                                     <span style={{ color: '#28a745', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                        <CheckCircle2 size={12} /> Pass: {sub.passPercentage.toFixed(1)}% ({sub.passCount})
+                                        <CheckCircle2 size={12} /> Pass: {sub.passPercentage.toFixed(1)}% ({sub.totalPassCount || sub.passCount || 0})
                                     </span>
                                     <span style={{ color: '#dc3545', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                        <AlertTriangle size={12} /> Fail: {failPct}% ({sub.failCount})
+                                        <AlertTriangle size={12} /> Fail: {failPct}% ({sub.failCount || 0})
                                     </span>
                                 </div>
 
@@ -166,67 +166,129 @@ const ResultDetails = () => {
                 </div>
             </div>
 
-            {/* Detailed Candidate Table */}
-            <div className="card" style={{ padding: '0', overflow: 'hidden', width: '100%' }}>
+            {/* Detailed Candidate Table (Pic 5 format) */}
+            <div className="card" style={{ padding: '0', overflow: 'hidden', width: '100%', marginBottom: '3rem' }}>
                 <div style={{ padding: '1.5rem 1.5rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem' }}>
-                    <h3 style={{ fontSize: '1.4rem' }}>Detailed Candidate Record</h3>
-                    <span style={{ fontSize: '0.75rem', color: '#888' }}>Click subject column headers for subject report</span>
+                    <h3 style={{ fontSize: '1.4rem' }}>Candidate Results & Performance Directory (Pic 5 Layout)</h3>
+                    <span style={{ fontSize: '0.75rem', color: '#888' }}>Failed subjects & remarks are highlighted in light red</span>
                 </div>
                 <div style={{ overflowX: 'auto', width: '100%' }}>
-                    <table style={{ margin: '0', width: '100%', borderSpacing: '0', fontSize: '0.85rem' }}>
+                    <table style={{ margin: '0', width: '100%', borderSpacing: '0', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
                         <thead>
-                            <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                                <th style={{ paddingLeft: '1rem', paddingRight: '0.5rem', textAlign: 'center', width: '50px' }}>Rank</th>
-                                <th style={{ padding: '0.6rem 0.5rem' }}>USN</th>
-                                <th style={{ padding: '0.6rem 0.5rem' }}>Name</th>
+                            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '45px' }}>Sl No</th>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'left' }}>Std Name</th>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'left' }}>USN</th>
                                 {result.subjects.map((s: any) => (
                                     <th 
                                         key={s.name} 
                                         onClick={() => setSelectedSubject(s.name)}
                                         className="subject-badge"
                                         title={`Click for ${s.name} Subject Dashboard`}
-                                        style={{ textAlign: 'center', cursor: 'pointer', padding: '0.6rem 0.4rem', fontSize: '0.75rem' }}
+                                        style={{ textAlign: 'center', cursor: 'pointer', padding: '0.8rem 0.4rem', fontSize: '0.75rem' }}
                                     >
                                         {s.name}
                                     </th>
                                 ))}
-                                <th style={{ textAlign: 'center', padding: '0.6rem 0.5rem' }}>Total</th>
-                                <th style={{ textAlign: 'center', padding: '0.6rem 0.5rem' }}>%</th>
-                                <th style={{ paddingRight: '1rem', paddingLeft: '0.5rem', textAlign: 'center' }}>Status</th>
+                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Total</th>
+                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Percentage</th>
+                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>No of Subjects Failed</th>
+                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Remark</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {students.map((s: any, idx: number) => (
-                                <tr key={s._id || `${s.usn}-${idx}`}>
-                                    <td style={{ paddingLeft: '1rem', paddingRight: '0.5rem', textAlign: 'center', background: 'transparent' }}>
-                                        <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{s.rank}</span>
-                                    </td>
-                                    <td className="nowrap" style={{ fontSize: '0.8rem', opacity: 0.85, padding: '0.6rem 0.5rem' }}>{s.usn}</td>
-                                    <td className="nowrap" style={{ fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.name}</td>
-                                    {result.subjects.map((sub: any) => (
-                                        <td key={sub.name} style={{ textAlign: 'center', padding: '0.6rem 0.4rem' }}>
-                                            <span style={{ 
-                                                color: s.marks[sub.name] < 35 ? '#ff4d4d' : '#fff',
-                                                fontWeight: s.marks[sub.name] < 35 ? 700 : 400
-                                            }}>
-                                                {s.marks[sub.name]}
-                                            </span>
+                            {students.map((s: any, idx: number) => {
+                                const failedCount = s.failedSubjectsCount !== undefined ? s.failedSubjectsCount : (result.subjects.filter((sub: any) => (s.marks[sub.name] || 0) < 35).length);
+                                const isFailedOverall = !s.isPass || s.remark === 'FAIL';
+                                return (
+                                    <tr key={s._id || `${s.usn}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                        <td style={{ textAlign: 'center', padding: '0.6rem 0.4rem', fontWeight: 600, color: 'var(--primary)' }}>
+                                            {idx + 1}
                                         </td>
-                                    ))}
-                                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '0.6rem 0.5rem' }}>{s.totalMarks}</td>
-                                    <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
-                                    <td style={{ paddingRight: '1rem', paddingLeft: '0.5rem', textAlign: 'center' }}>
-                                        <span style={{ 
-                                            padding: '3px 10px', 
-                                            borderRadius: '20px', 
-                                            fontSize: '0.65rem', 
-                                            fontWeight: 700,
-                                            background: s.isPass ? 'rgba(40, 167, 69, 0.15)' : 'rgba(220, 53, 69, 0.15)',
-                                            color: s.isPass ? '#28a745' : '#dc3545'
+                                        <td className="nowrap" style={{ fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.name}</td>
+                                        <td className="nowrap" style={{ fontSize: '0.8rem', opacity: 0.85, padding: '0.6rem 0.5rem' }}>{s.usn}</td>
+                                        {result.subjects.map((sub: any) => {
+                                            const markVal = s.marks[sub.name] || 0;
+                                            const isSubFail = markVal < 35;
+                                            return (
+                                                <td 
+                                                    key={sub.name} 
+                                                    style={{ 
+                                                        textAlign: 'center', 
+                                                        padding: '0.6rem 0.4rem',
+                                                        backgroundColor: isSubFail ? 'rgba(220, 53, 69, 0.25)' : 'transparent',
+                                                        color: isSubFail ? '#ff6b6b' : '#fff',
+                                                        fontWeight: isSubFail ? 700 : 400
+                                                    }}
+                                                >
+                                                    {markVal}
+                                                </td>
+                                            );
+                                        })}
+                                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '0.6rem 0.5rem' }}>{s.totalMarks}</td>
+                                        <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
+                                        <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
+                                            {failedCount}
+                                        </td>
+                                        <td style={{ 
+                                            textAlign: 'center', 
+                                            padding: '0.6rem 0.5rem',
+                                            backgroundColor: isFailedOverall ? 'rgba(220, 53, 69, 0.25)' : 'rgba(40, 167, 69, 0.15)',
+                                            color: isFailedOverall ? '#ff6b6b' : '#28a745',
+                                            fontWeight: 700
                                         }}>
-                                            {s.isPass ? 'PASS' : 'FAIL'}
-                                        </span>
-                                    </td>
+                                            {s.remark || (s.isPass ? 'PASS' : 'FAIL')}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Pic 2 Subject-wise Statistics Table below Student List */}
+            <div className="card" style={{ padding: '1.5rem', marginBottom: '3rem', width: '100%' }}>
+                <h3 style={{ fontSize: '1.3rem', marginBottom: '1rem', color: 'var(--primary)' }}>
+                    Subject Statistics Summary Matrix (Pic 2 Layout)
+                </h3>
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                    <table style={{ margin: '0', width: '100%', borderSpacing: '0', fontSize: '0.8rem', textAlign: 'center', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+                                <th style={{ padding: '0.7rem', textAlign: 'left' }}>Metric</th>
+                                {result.subjects.map((sub: any) => (
+                                    <th key={sub.name} style={{ padding: '0.7rem' }}>{sub.name.split(' ')[0]}</th>
+                                ))}
+                                <th style={{ padding: '0.7rem', color: 'var(--primary)' }}>Overall Batch</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {[
+                                { label: 'Appeared', key: 'appearedCount', overall: result.overallStats.totalStudents },
+                                { label: 'FCD', key: 'fcdCount', overall: result.overallStats.fcdCount || 0 },
+                                { label: 'FC', key: 'fcCount', overall: result.overallStats.fcCount || 0 },
+                                { label: 'SC', key: 'scCount', overall: result.overallStats.scCount || 0 },
+                                { label: 'pass', key: 'passClassCount', overall: result.overallStats.passClassCount || 0 },
+                                { label: 'Fail', key: 'failCount', overall: result.overallStats.failCount || 0 },
+                                { label: 'AB', key: 'abCount', overall: '-' },
+                                { label: 'With Held', key: 'withHeldCount', overall: '-' },
+                                { label: 'Percentage', key: 'passPercentage', isPct: true, overall: `${(result.overallStats.passPercentage || 0).toFixed(2)}%` },
+                                { label: 'Staff Name', isBlank: true, overall: '-' },
+                                { label: 'Staff Signature', isBlank: true, overall: '-' }
+                            ].map((m: any, idx: number) => (
+                                <tr key={m.label} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                                    <td style={{ textAlign: 'left', padding: '0.6rem', fontWeight: 700 }}>{m.label}</td>
+                                    {result.subjects.map((sub: any) => {
+                                        let displayVal = '-';
+                                        if (m.isBlank) displayVal = ''; // Blank for lectures to manually fill in excel later
+                                        else if (m.isPct) displayVal = `${(sub.passPercentage || 0).toFixed(2)}%`;
+                                        else displayVal = sub[m.key] !== undefined ? sub[m.key] : 0;
+                                        return (
+                                            <td key={sub.name} style={{ padding: '0.6rem' }}>{displayVal}</td>
+                                        );
+                                    })}
+                                    <td style={{ padding: '0.6rem', fontWeight: 700, color: 'var(--primary)' }}>{m.overall}</td>
                                 </tr>
                             ))}
                         </tbody>
