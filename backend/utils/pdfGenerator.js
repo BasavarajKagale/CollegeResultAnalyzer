@@ -519,12 +519,18 @@ async function generateResultPDF(result, students, res) {
         const subStudents = (students || []).map(st => {
             const markVal = Number(st.marks?.[sub.name]) || 0;
             const det = st.subjectDetails?.[sub.name] || {};
-            const isSubPass = det.result ? (det.result.toUpperCase() === 'P' || det.result.toUpperCase() === 'PASS') : markVal >= 35;
+            const inVal = det.in !== undefined ? det.in : 0;
+            const exVal = det.ex !== undefined ? det.ex : 0;
+            const resUpper = (det.result || '').toUpperCase();
+            const isSubPass = resUpper ? (resUpper === 'P' || resUpper === 'PASS') : (markVal >= 35 && exVal >= 18);
             return {
                 name: st.name,
                 usn: st.usn,
+                in: inVal,
+                ex: exVal,
                 mark: markVal,
-                isPass: isSubPass
+                isPass: isSubPass,
+                result: resUpper
             };
         });
 
@@ -541,11 +547,13 @@ async function generateResultPDF(result, students, res) {
         currentY += 14;
 
         const subTopCols = [
-            { name: 'Sl No', width: 40, align: 'center' },
-            { name: 'USN', width: 100, align: 'left' },
-            { name: 'Student Name', width: 210, align: 'left' },
-            { name: 'Marks Obtained', width: 90, align: 'center' },
-            { name: 'Status', width: 75, align: 'center' }
+            { name: 'Sl No', width: 35, align: 'center' },
+            { name: 'USN', width: 85, align: 'left' },
+            { name: 'Student Name', width: 160, align: 'left' },
+            { name: 'IN', width: 45, align: 'center' },
+            { name: 'EX', width: 45, align: 'center' },
+            { name: 'Marks Obtained', width: 80, align: 'center' },
+            { name: 'Status', width: 65, align: 'center' }
         ];
 
         doc.rect(margin, currentY, contentWidth, 16).fill('#0F172A');
@@ -569,13 +577,19 @@ async function generateResultPDF(result, students, res) {
             doc.fillColor('#334155').fontSize(7.5).font('Helvetica-Bold').text(t.usn || '-', rx + 4, currentY + 4, { width: subTopCols[1].width - 8 });
             rx += subTopCols[1].width;
 
-            doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((t.name || '-').substring(0, 38), rx + 4, currentY + 4, { width: subTopCols[2].width - 8 });
+            doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((t.name || '-').substring(0, 28), rx + 4, currentY + 4, { width: subTopCols[2].width - 8 });
             rx += subTopCols[2].width;
 
-            doc.fillColor('#1E40AF').fontSize(8).font('Helvetica-Bold').text(`${t.mark}/100`, rx + 4, currentY + 4, { width: subTopCols[3].width - 8, align: 'center' });
+            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${t.in}`, rx + 4, currentY + 4, { width: subTopCols[3].width - 8, align: 'center' });
             rx += subTopCols[3].width;
 
-            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('PASS', rx + 4, currentY + 4, { width: subTopCols[4].width - 8, align: 'center' });
+            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${t.ex}`, rx + 4, currentY + 4, { width: subTopCols[4].width - 8, align: 'center' });
+            rx += subTopCols[4].width;
+
+            doc.fillColor('#1E40AF').fontSize(8).font('Helvetica-Bold').text(`${t.mark}/100`, rx + 4, currentY + 4, { width: subTopCols[5].width - 8, align: 'center' });
+            rx += subTopCols[5].width;
+
+            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('PASS', rx + 4, currentY + 4, { width: subTopCols[6].width - 8, align: 'center' });
 
             currentY += 16;
         });
@@ -583,7 +597,7 @@ async function generateResultPDF(result, students, res) {
         currentY += 12;
 
         // -------------------------------------------------------------
-        // Sub Table 2: Subject Failed Students List
+        // Sub Table 2: Subject Failed Students List (Pic 1 Structure)
         // -------------------------------------------------------------
         doc.fillColor('#B91C1C').fontSize(8.5).font('Helvetica-Bold').text(`• Failed Students List (${subFailed.length} Failed)`, margin + 4, currentY + 2);
         currentY += 14;
@@ -595,11 +609,13 @@ async function generateResultPDF(result, students, res) {
             currentY += 24;
         } else {
             const subFailCols = [
-                { name: 'Sl No', width: 40, align: 'center' },
-                { name: 'USN', width: 100, align: 'left' },
-                { name: 'Student Name', width: 210, align: 'left' },
-                { name: 'Marks Obtained', width: 90, align: 'center' },
-                { name: 'Status', width: 75, align: 'center' }
+                { name: 'Sl No', width: 35, align: 'center' },
+                { name: 'USN', width: 85, align: 'left' },
+                { name: 'Student Name', width: 160, align: 'left' },
+                { name: 'IN', width: 45, align: 'center' },
+                { name: 'EX', width: 45, align: 'center' },
+                { name: 'Marks Obtained', width: 80, align: 'center' },
+                { name: 'Status', width: 65, align: 'center' }
             ];
 
             doc.rect(margin, currentY, contentWidth, 16).fill('#7F1D1D');
@@ -623,13 +639,20 @@ async function generateResultPDF(result, students, res) {
                 doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text(f.usn || '-', rx + 4, currentY + 4, { width: subFailCols[1].width - 8 });
                 rx += subFailCols[1].width;
 
-                doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((f.name || '-').substring(0, 38), rx + 4, currentY + 4, { width: subFailCols[2].width - 8 });
+                doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((f.name || '-').substring(0, 28), rx + 4, currentY + 4, { width: subFailCols[2].width - 8 });
                 rx += subFailCols[2].width;
 
-                doc.fillColor('#B91C1C').fontSize(8).font('Helvetica-Bold').text(`${f.mark}/100`, rx + 4, currentY + 4, { width: subFailCols[3].width - 8, align: 'center' });
+                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.in}`, rx + 4, currentY + 4, { width: subFailCols[3].width - 8, align: 'center' });
                 rx += subFailCols[3].width;
 
-                doc.fillColor('#B91C1C').fontSize(7.5).font('Helvetica-Bold').text('FAIL', rx + 4, currentY + 4, { width: subFailCols[4].width - 8, align: 'center' });
+                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.ex}`, rx + 4, currentY + 4, { width: subFailCols[4].width - 8, align: 'center' });
+                rx += subFailCols[4].width;
+
+                doc.fillColor('#B91C1C').fontSize(8).font('Helvetica-Bold').text(`${f.mark}/100`, rx + 4, currentY + 4, { width: subFailCols[5].width - 8, align: 'center' });
+                rx += subFailCols[5].width;
+
+                const statusText = (f.result === 'AB' || f.result === 'ABSENT') ? 'ABSENT' : 'FAIL';
+                doc.fillColor('#B91C1C').fontSize(7.5).font('Helvetica-Bold').text(statusText, rx + 4, currentY + 4, { width: subFailCols[6].width - 8, align: 'center' });
 
                 currentY += 16;
             });

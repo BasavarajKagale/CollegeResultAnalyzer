@@ -199,7 +199,14 @@ const ResultDetails = () => {
                         </thead>
                         <tbody>
                             {[...students].sort((a: any, b: any) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' })).map((s: any, idx: number) => {
-                                const failedCount = s.failedSubjectsCount !== undefined ? s.failedSubjectsCount : (result.subjects.filter((sub: any) => (s.marks[sub.name] || 0) < 35).length);
+                                const failedCount = s.failedSubjectsCount !== undefined ? s.failedSubjectsCount : (
+                                    result.subjects.filter((sub: any) => {
+                                        const m = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
+                                        const d = s.subjectDetails?.[sub.name] || {};
+                                        const r = (d.result || '').toUpperCase();
+                                        return r === 'AB' || r === 'F' || r === 'FAIL' || m < 35 || (d.ex !== undefined && d.ex < 18) || (d.in !== undefined && d.in < 18);
+                                    }).length
+                                );
                                 const isFailedOverall = !s.isPass || s.remark === 'FAIL';
                                 return (
                                     <tr key={s._id || `${s.usn}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
@@ -216,15 +223,15 @@ const ResultDetails = () => {
                                             let isSubFail = false;
                                             let reasonTag = '';
 
-                                            if (resUpper === 'AB' || resUpper === 'ABSENT') {
+                                            if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A') {
                                                 isSubFail = true;
                                                 reasonTag = '(AB)';
-                                            } else if (det.ex !== undefined && det.ex >= 0 && det.ex < 18) {
-                                                isSubFail = true;
-                                                reasonTag = '(EX)';
                                             } else if (det.in !== undefined && det.in >= 0 && det.in < 18) {
                                                 isSubFail = true;
                                                 reasonTag = '(IN)';
+                                            } else if (det.ex !== undefined && det.ex >= 0 && det.ex < 18) {
+                                                isSubFail = true;
+                                                reasonTag = '(EX)';
                                             } else if (markVal < 35 || resUpper === 'F' || resUpper === 'FAIL') {
                                                 isSubFail = true;
                                                 reasonTag = (det.in !== undefined && det.in < 18) ? '(IN)' : '(EX)';
@@ -235,7 +242,7 @@ const ResultDetails = () => {
                                             return (
                                                 <td 
                                                     key={sub.name} 
-                                                    title={isSubFail ? `Failed due to ${reasonTag.trim().replace('(', '').replace(')', '')}` : `Passed ${sub.name}`}
+                                                    title={isSubFail ? `Failed: ${markVal} marks ${reasonTag}` : `Passed ${sub.name}: ${markVal}`}
                                                     style={{ 
                                                         textAlign: 'center', 
                                                         padding: '0.6rem 0.4rem',

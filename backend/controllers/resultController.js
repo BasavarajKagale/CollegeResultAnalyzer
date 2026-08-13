@@ -77,19 +77,43 @@ const exportExcel = async (req, res) => {
         const result = await Result.findById(req.params.id);
         if (!result) return res.status(404).json({ error: 'Result not found' });
         const students = await Student.find({ resultId: req.params.id });
-        // Arrange students as per USN ascending order
         students.sort((a, b) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' }));
 
         const workbook = new ExcelJS.Workbook();
         const subjects = result.subjects || [];
         const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
+        const maxTotalMarks = (subjects.length || 1) * 100;
 
         // -------------------------------------------------------------
-        // SHEET 1: Student Result Sheet (Pic 5 + Pic 2 Layout)
+        // SINGLE UNIFIED WORKSHEET: Student Result Sheet & All Analytics
         // -------------------------------------------------------------
-        const studentSheet = workbook.addWorksheet('Student Result Sheet');
+        const sheet = workbook.addWorksheet('Result Analysis & Directory');
 
-        // Header Row 1 & Row 2
+        // SECTION 1: Banner Header
+        const bannerRow = sheet.addRow([result.collegeName || "KLE Society's KLE College of Engineering and Technology, Chikodi"]);
+        bannerRow.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        bannerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        bannerRow.height = 30;
+
+        const subBannerRow = sheet.addRow(['Candidate Results & Comprehensive Performance Directory Report']);
+        subBannerRow.font = { bold: true, size: 11, color: { argb: 'FF93C5FD' } };
+        subBannerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        subBannerRow.height = 20;
+
+        const totalCol = 4 + subjects.length * 4;
+        const totalSheetCols = totalCol + 3;
+
+        sheet.mergeCells(1, 1, 1, totalSheetCols);
+        sheet.mergeCells(2, 1, 2, totalSheetCols);
+
+        sheet.getRow(1).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+        sheet.getRow(2).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+
+        sheet.addRow([]); // Blank line
+
+        // -------------------------------------------------------------
+        // SECTION 2: CANDIDATE RESULTS DIRECTORY (PIC 2 LAYOUT)
+        // -------------------------------------------------------------
         const header1 = ['Sl. No.', 'Std. Name', 'USN'];
         const header2 = ['', '', ''];
 
@@ -101,30 +125,31 @@ const exportExcel = async (req, res) => {
         header1.push('Total', 'Percentage', 'No of Subjects Failed', 'Remark');
         header2.push('', '', '', '');
 
-        studentSheet.addRow(header1);
-        studentSheet.addRow(header2);
+        const r1Idx = sheet.lastRow.number + 1;
+        sheet.addRow(header1);
+        const r2Idx = sheet.lastRow.number + 1;
+        sheet.addRow(header2);
 
         // Merge Subject Headers in Row 1
         let colIdx = 4;
         subjects.forEach(() => {
-            studentSheet.mergeCells(1, colIdx, 1, colIdx + 3);
+            sheet.mergeCells(r1Idx, colIdx, r1Idx, colIdx + 3);
             colIdx += 4;
         });
 
         // Merge Non-subject headers across Row 1 & Row 2
-        studentSheet.mergeCells(1, 1, 2, 1); // Sl. No.
-        studentSheet.mergeCells(1, 2, 2, 2); // Std. Name
-        studentSheet.mergeCells(1, 3, 2, 3); // USN
+        sheet.mergeCells(r1Idx, 1, r2Idx, 1); // Sl. No.
+        sheet.mergeCells(r1Idx, 2, r2Idx, 2); // Std. Name
+        sheet.mergeCells(r1Idx, 3, r2Idx, 3); // USN
 
-        const totalCol = 4 + subjects.length * 4;
-        studentSheet.mergeCells(1, totalCol, 2, totalCol);
-        studentSheet.mergeCells(1, totalCol + 1, 2, totalCol + 1);
-        studentSheet.mergeCells(1, totalCol + 2, 2, totalCol + 2);
-        studentSheet.mergeCells(1, totalCol + 3, 2, totalCol + 3);
+        sheet.mergeCells(r1Idx, totalCol, r2Idx, totalCol);
+        sheet.mergeCells(r1Idx, totalCol + 1, r2Idx, totalCol + 1);
+        sheet.mergeCells(r1Idx, totalCol + 2, r2Idx, totalCol + 2);
+        sheet.mergeCells(r1Idx, totalCol + 3, r2Idx, totalCol + 3);
 
         // Header Styling
-        [1, 2].forEach(rIdx => {
-            const row = studentSheet.getRow(rIdx);
+        [r1Idx, r2Idx].forEach(rowIdx => {
+            const row = sheet.getRow(rowIdx);
             row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
             row.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             row.eachCell(cell => {
@@ -132,7 +157,7 @@ const exportExcel = async (req, res) => {
             });
         });
 
-        // Add Student Data Rows (Pic 5 format) - Arranged by USN
+        // Student Data Rows
         students.forEach((s, sIdx) => {
             const rowData = [sIdx + 1, s.name, s.usn];
             const detailsMap = s.subjectDetails || {};
@@ -149,10 +174,10 @@ const exportExcel = async (req, res) => {
 
             rowData.push(s.totalMarks, `${s.percentage}%`, s.failedSubjectsCount || 0, s.remark || (s.isPass ? 'PASS' : 'FAIL'));
 
-            const addedRow = studentSheet.addRow(rowData);
+            const addedRow = sheet.addRow(rowData);
             addedRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            // Cell Highlight Styling: Highlight ONLY specific failing sub-cells (Image 2 format)
+            // Highlight failing sub-cells
             let currC = 4;
             subjects.forEach(sub => {
                 const det = detailsMap[sub.name] || {};
@@ -169,25 +194,18 @@ const exportExcel = async (req, res) => {
                 const lightRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 const darkRedFont = { color: { argb: 'FF991B1B' }, bold: true };
 
-                // 1. IN Cell (currC) - Highlight ONLY if IN failed
                 if (isInFail) {
                     addedRow.getCell(currC).fill = lightRedFill;
                     addedRow.getCell(currC).font = darkRedFont;
                 }
-
-                // 2. EX Cell (currC + 1) - Highlight ONLY if EX failed (< 18)
                 if (isExFail) {
                     addedRow.getCell(currC + 1).fill = lightRedFill;
                     addedRow.getCell(currC + 1).font = darkRedFont;
                 }
-
-                // 3. Total Cell (currC + 2) - Highlight if total < 35 or subject failed
                 if (isTotalFail) {
                     addedRow.getCell(currC + 2).fill = lightRedFill;
                     addedRow.getCell(currC + 2).font = darkRedFont;
                 }
-
-                // 4. Result Cell (currC + 3) - Highlight if Result is F/FAIL/AB
                 if (isResFail) {
                     addedRow.getCell(currC + 3).fill = lightRedFill;
                     addedRow.getCell(currC + 3).font = darkRedFont;
@@ -196,22 +214,34 @@ const exportExcel = async (req, res) => {
                 currC += 4;
             });
 
-            // Overall Remark Cell Highlight (Light Red ONLY for FAIL, default black for PASS)
+            // Overall Remark Highlight
             const remarkCell = addedRow.getCell(totalCol + 3);
             if (s.remark === 'FAIL' || !s.isPass || (s.failedSubjectsCount && s.failedSubjectsCount > 0)) {
                 remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 remarkCell.font = { color: { argb: 'FF991B1B' }, bold: true };
             } else {
-                remarkCell.font = { color: { argb: 'FF000000' }, bold: false };
+                remarkCell.font = { color: { argb: 'FF15803D' }, bold: true };
+            }
+
+            // No of Subjects Failed Highlight
+            const failCountCell = addedRow.getCell(totalCol + 2);
+            if (s.failedSubjectsCount && s.failedSubjectsCount > 0) {
+                failCountCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+                failCountCell.font = { color: { argb: 'FF991B1B' }, bold: true };
             }
         });
 
-        // Blank Divider Row
-        studentSheet.addRow([]);
+        sheet.addRow([]); // Blank line
 
         // -------------------------------------------------------------
-        // PIC 2: Subject Summary Rows Below Student Table
+        // SECTION 3: SUBJECT STATISTICS SUMMARY MATRIX (PIC 5 LAYOUT)
         // -------------------------------------------------------------
+        const matrixTitleRow = sheet.addRow(['Subject Statistics Summary Matrix (Pic 5 Layout)']);
+        matrixTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        matrixTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
+        sheet.mergeCells(matrixTitleRow.number, 1, matrixTitleRow.number, totalSheetCols);
+        sheet.getRow(matrixTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+
         const pic2Metrics = [
             { key: 'appearedCount', label: 'Appeared' },
             { key: 'fcdCount', label: 'FCD' },
@@ -240,7 +270,7 @@ const exportExcel = async (req, res) => {
             subjects.forEach(sub => {
                 let val = '';
                 if (m.key === 'staffName' || m.key === 'staffSig') {
-                    val = ''; // Left blank for manual entry as requested
+                    val = '';
                 } else if (m.key === 'passPercentage') {
                     val = `${(sub.passPercentage || 0).toFixed(2)}%`;
                 } else {
@@ -249,18 +279,16 @@ const exportExcel = async (req, res) => {
                 rowData.push(val, '', '', '');
             });
 
-            // Right Side Overall Summary Box
             let boxKey = Object.keys(overallBoxValues)[mIdx];
             if (boxKey) {
                 rowData.push('', boxKey, overallBoxValues[boxKey], '');
             }
 
-            const row = studentSheet.addRow(rowData);
+            const row = sheet.addRow(rowData);
 
-            // Merge per-subject 4 columns for Pic 2 metrics
             let cIdx = 4;
             subjects.forEach(() => {
-                studentSheet.mergeCells(row.number, cIdx, row.number, cIdx + 3);
+                sheet.mergeCells(row.number, cIdx, row.number, cIdx + 3);
                 cIdx += 4;
             });
 
@@ -268,92 +296,56 @@ const exportExcel = async (req, res) => {
             row.alignment = { vertical: 'middle', horizontal: 'center' };
         });
 
+        sheet.addRow([]); sheet.addRow([]); // Blank lines
+
         // -------------------------------------------------------------
-        // APPLY SECTION & COLUMN BORDERS FOR SHEET 1
+        // SECTION 4: ACADEMIC TOPPERS (HALL OF FAME - PIC 3 LAYOUT)
         // -------------------------------------------------------------
-        const totalSheetCols = totalCol + 3;
-        studentSheet.eachRow((row) => {
-            for (let colNumber = 1; colNumber <= totalSheetCols; colNumber++) {
-                const cell = row.getCell(colNumber);
+        const toppersTitleRow = sheet.addRow(['2. Academic Toppers (Hall of Fame)']);
+        toppersTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        toppersTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
+        sheet.mergeCells(toppersTitleRow.number, 1, toppersTitleRow.number, 8);
+        sheet.getRow(toppersTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
 
-                // Default thin border for all cells
-                const borderObj = {
-                    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-                    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-                    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-                    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
-                };
+        const topperHeaderRow = sheet.addRow(['Rank', 'USN', 'Student Name', '', '', 'Marks Scored', 'Percentage', 'Class / Result']);
+        topperHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        topperHeaderRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        sheet.mergeCells(topperHeaderRow.number, 3, topperHeaderRow.number, 5);
+        topperHeaderRow.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } });
 
-                // Section Boundary Borders (Medium Right Border)
-                // 1. After USN Column (col 3)
-                // 2. After each Subject block (col 7, 11, 15, 19...)
-                // 3. After Total, Percentage, No of Failures, Remark columns
-                const isUsnBoundary = colNumber === 3;
-                const isSubjectBoundary = (colNumber - 3) % 4 === 0 && colNumber >= 7 && colNumber < totalCol;
-                const isSummaryBoundary = colNumber >= totalCol && colNumber <= totalCol + 3;
+        const sortedByMarks = [...students].sort((a, b) => (b.totalMarks || 0) - (a.totalMarks || 0));
+        const top5 = sortedByMarks.slice(0, 5);
 
-                if (isUsnBoundary || isSubjectBoundary || isSummaryBoundary) {
-                    borderObj.right = { style: 'medium', color: { argb: 'FF1E293B' } };
-                }
+        top5.forEach((t, idx) => {
+            let classStr = 'Pass Class';
+            if (t.percentage >= 70) classStr = 'FCD (Distinction)';
+            else if (t.percentage >= 60) classStr = 'FC (First Class)';
+            else if (t.percentage >= 50) classStr = 'SC (Second Class)';
 
-                cell.border = borderObj;
-            }
+            const r = sheet.addRow([`#${idx + 1}`, t.usn, t.name, '', '', `${t.totalMarks}/${maxTotalMarks}`, `${t.percentage}%`, classStr]);
+            sheet.mergeCells(r.number, 3, r.number, 5);
+            r.alignment = { vertical: 'middle', horizontal: 'center' };
+            r.getCell(1).font = { bold: true, color: { argb: 'FF2563EB' } };
+            r.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
         });
 
-        // Adjust Column Widths
-        studentSheet.getColumn(1).width = 8;
-        studentSheet.getColumn(2).width = 25;
-        studentSheet.getColumn(3).width = 16;
+        sheet.addRow([]); sheet.addRow([]); // Blank lines
 
         // -------------------------------------------------------------
-        // SHEET 2: Subject Summary (Pic 4 Layout)
+        // SECTION 5: OVERALL CLASS PERFORMANCE STATISTICS (PIC 3 LAYOUT)
         // -------------------------------------------------------------
-        const subjectSheet = workbook.addWorksheet('Subject Summary');
-        subjectSheet.columns = [
-            { header: 'Subject With Code', key: 'name', width: 25 },
-            { header: 'Staff Name', key: 'staffName', width: 22 },
-            { header: 'FCD', key: 'fcdCount', width: 10 },
-            { header: 'FC', key: 'fcCount', width: 10 },
-            { header: 'SC', key: 'scCount', width: 10 },
-            { header: 'Pass', key: 'passClassCount', width: 10 },
-            { header: 'AB', key: 'abCount', width: 10 },
-            { header: 'With Held', key: 'withHeldCount', width: 12 },
-            { header: 'Fail', key: 'failCount', width: 10 },
-            { header: 'Total Pass', key: 'totalPassCount', width: 12 },
-            { header: '%', key: 'passPercentage', width: 12 },
-            { header: 'TotalStudent Appeared', key: 'appearedCount', width: 22 }
-        ];
+        const overallTitleRow = sheet.addRow(['3. Overall Class Performance Bar Chart & Statistics']);
+        overallTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        overallTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
+        sheet.mergeCells(overallTitleRow.number, 1, overallTitleRow.number, 6);
+        sheet.getRow(overallTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
 
-        // Format header
-        const subHeaderRow = subjectSheet.getRow(1);
-        subHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        subHeaderRow.eachCell(cell => cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } });
+        const p1Header = sheet.addRow(['Appeared', 'FCD', 'FC', 'SC', 'Total Fail', 'Total Pass']);
+        p1Header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        p1Header.alignment = { vertical: 'middle', horizontal: 'center' };
+        p1Header.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } });
 
-        subjects.forEach(sub => {
-            subjectSheet.addRow({
-                name: sub.name,
-                staffName: '', // Blank for manual entry
-                fcdCount: sub.fcdCount || 0,
-                fcCount: sub.fcCount || 0,
-                scCount: sub.scCount || 0,
-                passClassCount: sub.passClassCount || 0,
-                abCount: sub.abCount || 0,
-                withHeldCount: sub.withHeldCount || 0,
-                failCount: sub.failCount || 0,
-                totalPassCount: sub.totalPassCount || 0,
-                passPercentage: (sub.passPercentage || 0).toFixed(2),
-                appearedCount: sub.appearedCount || stats.totalStudents || 0
-            });
-        });
-
-        // -------------------------------------------------------------
-        // SHEET 3: Overall Analysis & Charts (Pic 1 Summary Table & Bar Charts)
-        // -------------------------------------------------------------
-        const analysisSheet = workbook.addWorksheet('Overall Analysis & Charts');
-
-        // Pic 1 Summary Table
-        analysisSheet.addRow(['Appeared', 'FCD', 'FC', 'SC', 'Total Fail', 'Total Pass']);
-        analysisSheet.addRow([
+        const p1Counts = sheet.addRow([
             stats.totalStudents || 0,
             stats.fcdCount || 0,
             stats.fcCount || 0,
@@ -361,21 +353,77 @@ const exportExcel = async (req, res) => {
             stats.failCount || 0,
             stats.passCount || 0
         ]);
+        p1Counts.font = { bold: true };
+        p1Counts.alignment = { vertical: 'middle', horizontal: 'center' };
+
         const tot = stats.totalStudents || 1;
-        analysisSheet.addRow([
+        const p1Pcts = sheet.addRow([
             '',
-            ((stats.fcdCount / tot) * 100).toFixed(2),
-            ((stats.fcCount / tot) * 100).toFixed(2),
-            ((stats.scCount / tot) * 100).toFixed(2),
-            ((stats.failCount / tot) * 100).toFixed(2),
-            ((stats.passPercentage || 0)).toFixed(2)
+            `${((stats.fcdCount / tot) * 100).toFixed(2)}%`,
+            `${((stats.fcCount / tot) * 100).toFixed(2)}%`,
+            `${((stats.scCount / tot) * 100).toFixed(2)}%`,
+            `${((stats.failCount / tot) * 100).toFixed(2)}%`,
+            `${(stats.passPercentage || 0).toFixed(2)}%`
         ]);
+        p1Pcts.font = { bold: true, color: { argb: 'FF2563EB' } };
+        p1Pcts.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        const aHeaderRow = analysisSheet.getRow(1);
-        aHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        aHeaderRow.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } });
+        sheet.addRow([]); sheet.addRow([]); // Blank lines
 
-        // Embed QuickChart Images into Sheet 3 if available
+        // -------------------------------------------------------------
+        // SECTION 6: SUBJECT-WISE PERFORMANCE SUMMARY TABLE (PIC 4 LAYOUT)
+        // -------------------------------------------------------------
+        const subTitleRow = sheet.addRow(['3. Subject-Wise Performance Summary Table']);
+        subTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        subTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
+        sheet.mergeCells(subTitleRow.number, 1, subTitleRow.number, 12);
+        sheet.getRow(subTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+
+        const subSumHeader = sheet.addRow([
+            'Subject With Code', 'Staff Name', 'FCD', 'FC', 'SC', 'Pass', 'AB', 'With Held', 'Fail', 'Total Pass', '%', 'Appeared'
+        ]);
+        subSumHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        subSumHeader.alignment = { vertical: 'middle', horizontal: 'center' };
+        subSumHeader.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } });
+
+        subjects.forEach(sub => {
+            const sr = sheet.addRow([
+                sub.name,
+                '', // Staff Name blank for manual entry
+                sub.fcdCount || 0,
+                sub.fcCount || 0,
+                sub.scCount || 0,
+                sub.passClassCount || 0,
+                sub.abCount || 0,
+                sub.withHeldCount || 0,
+                sub.failCount || 0,
+                sub.totalPassCount || 0,
+                `${(sub.passPercentage || 0).toFixed(2)}%`,
+                sub.appearedCount || stats.totalStudents || 0
+            ]);
+            sr.alignment = { vertical: 'middle', horizontal: 'center' };
+            sr.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+        });
+
+        // -------------------------------------------------------------
+        // APPLY BORDERS & COLUMN WIDTHS
+        // -------------------------------------------------------------
+        sheet.eachRow(row => {
+            row.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+                };
+            });
+        });
+
+        sheet.getColumn(1).width = 8;
+        sheet.getColumn(2).width = 25;
+        sheet.getColumn(3).width = 16;
+
+        // QuickChart image embedding into the single sheet (Pic 3 & Pic 4 Bar Charts)
         try {
             const chart1Config = {
                 type: 'bar',
@@ -386,19 +434,13 @@ const exportExcel = async (req, res) => {
                         { label: 'Percentage (%)', backgroundColor: '#B91C1C', data: [null, parseFloat(((stats.fcdCount / tot) * 100).toFixed(2)), parseFloat(((stats.fcCount / tot) * 100).toFixed(2)), parseFloat(((stats.scCount / tot) * 100).toFixed(2)), parseFloat(((stats.failCount / tot) * 100).toFixed(2)), parseFloat((stats.passPercentage || 0).toFixed(2))] }
                     ]
                 },
-                options: { plugins: { title: { display: true, text: 'Pic 1: Overall Class Performance' } } }
+                options: { plugins: { title: { display: true, text: 'Overall Class Performance Bar Chart (Pic 3)' } } }
             };
 
-            const chart1Buffer = await fetchChartImage(chart1Config, 650, 360);
-            if (chart1Buffer) {
-                const imgId1 = workbook.addImage({ buffer: chart1Buffer, extension: 'png' });
-                analysisSheet.addImage(imgId1, 'A6:G20');
-            }
-
-            const chart3Config = {
+            const chart2Config = {
                 type: 'bar',
                 data: {
-                    labels: subjects.map(s => s.name.split(' ')[0]),
+                    labels: subjects.map(s => (s.name || '').split(' ')[0]),
                     datasets: [
                         { label: 'FCD', backgroundColor: '#2563EB', data: subjects.map(s => s.fcdCount || 0) },
                         { label: 'FC', backgroundColor: '#DC2626', data: subjects.map(s => s.fcCount || 0) },
@@ -411,13 +453,23 @@ const exportExcel = async (req, res) => {
                         { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat((s.passPercentage || 0).toFixed(2))) }
                     ]
                 },
-                options: { plugins: { title: { display: true, text: 'Pic 3: Subject-Wise Performance Breakdown' } } }
+                options: { plugins: { title: { display: true, text: 'Subject-Wise Performance Bar Chart Breakdown (Pic 4)' } } }
             };
 
-            const chart3Buffer = await fetchChartImage(chart3Config, 750, 380);
-            if (chart3Buffer) {
-                const imgId3 = workbook.addImage({ buffer: chart3Buffer, extension: 'png' });
-                analysisSheet.addImage(imgId3, 'A22:J38');
+            const [chart1Buffer, chart2Buffer] = await Promise.all([
+                fetchChartImage(chart1Config, 650, 320),
+                fetchChartImage(chart2Config, 800, 360)
+            ]);
+
+            if (chart1Buffer) {
+                const imgId1 = workbook.addImage({ buffer: chart1Buffer, extension: 'png' });
+                sheet.addImage(imgId1, `H${overallTitleRow.number}:N${overallTitleRow.number + 15}`);
+            }
+
+            if (chart2Buffer) {
+                const imgId2 = workbook.addImage({ buffer: chart2Buffer, extension: 'png' });
+                const startR = subTitleRow.number + subjects.length + 3;
+                sheet.addImage(imgId2, `A${startR}:L${startR + 18}`);
             }
         } catch (chartErr) {
             console.error('Excel chart embedding skipped:', chartErr);
