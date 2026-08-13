@@ -112,5 +112,5 @@ This project includes a root `render.yaml` Blueprint file for seamless automated
 ---
 
 <div align="center">
-  <i>Developed with ❤️ for Educators and Higher Academic Institutions.</i>
+  <i>https://collegeresultanalyzer-1.onrender.com/</i>
 </div>
