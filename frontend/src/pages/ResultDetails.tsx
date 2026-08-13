@@ -193,8 +193,8 @@ const ResultDetails = () => {
                                 ))}
                                 <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Total</th>
                                 <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Percentage</th>
-                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Remark</th>
                                 <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>No of Subjects Failed</th>
+                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Remark</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -262,6 +262,9 @@ const ResultDetails = () => {
                                             {s.totalMarks}/{(result.subjects?.length || 1) * 100}
                                         </td>
                                         <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
+                                        <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
+                                            {failedCount}
+                                        </td>
                                         <td style={{ 
                                             textAlign: 'center', 
                                             padding: '0.6rem 0.5rem',
@@ -271,9 +274,6 @@ const ResultDetails = () => {
                                         }}>
                                             {s.remark || (s.isPass ? 'PASS' : 'FAIL')}
                                         </td>
-                                        <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
-                                            {failedCount}
-                                        </td>
                                     </tr>
                                 );
                             })}
@@ -282,10 +282,10 @@ const ResultDetails = () => {
                 </div>
             </div>
 
-            {/* Pic 2 Subject-wise Statistics Table below Student List */}
+            {/* Subject-wise Statistics Table below Student List */}
             <div className="card" style={{ padding: '1.5rem', marginBottom: '3rem', width: '100%' }}>
                 <h3 style={{ fontSize: '1.3rem', marginBottom: '1rem', color: 'var(--primary)' }}>
-                    Subject Statistics Summary Matrix (Pic 2 Layout)
+                    Subject Statistics Summary Matrix
                 </h3>
                 <div style={{ overflowX: 'auto', width: '100%' }}>
                     <table style={{ margin: '0', width: '100%', borderSpacing: '0', fontSize: '0.8rem', textAlign: 'center', borderCollapse: 'collapse' }}>
@@ -308,9 +308,7 @@ const ResultDetails = () => {
                                 { label: 'Fail', key: 'failCount', overall: result.overallStats.failCount || 0 },
                                 { label: 'AB', key: 'abCount', overall: '-' },
                                 { label: 'With Held', key: 'withHeldCount', overall: '-' },
-                                { label: 'Percentage', key: 'passPercentage', isPct: true, overall: `${(result.overallStats.passPercentage || 0).toFixed(2)}%` },
-                                { label: 'Staff Name', isBlank: true, overall: '-' },
-                                { label: 'Staff Signature', isBlank: true, overall: '-' }
+                                { label: 'Percentage', key: 'passPercentage', isPct: true, overall: `${(result.overallStats.passPercentage || 0).toFixed(2)}%` }
                             ].map((m: any, idx: number) => (
                                 <tr key={m.label} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                                     <td style={{ textAlign: 'left', padding: '0.6rem', fontWeight: 700 }}>{m.label}</td>

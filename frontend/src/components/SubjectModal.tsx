@@ -12,12 +12,22 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
 
     // Extract scores for this subject
     const subjectStudents = students.map(s => {
-        const mark = Number(s.marks[subjectName]) || 0;
+        const det = s.subjectDetails?.[subjectName] || {};
+        const resUpper = (det.result || '').toUpperCase();
+        const mark = s.marks[subjectName] !== undefined ? Number(s.marks[subjectName]) : (det.total !== undefined ? Number(det.total) : 0);
+
+        let isPass = true;
+        if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || resUpper === 'F' || resUpper === 'FAIL' || mark < 35) {
+            isPass = false;
+        } else if ((det.in !== undefined && det.in > 0 && det.in < 18 && (mark < 35 || resUpper === 'F')) || (det.ex !== undefined && det.ex > 0 && det.ex < 18 && (mark < 35 || resUpper === 'F'))) {
+            isPass = false;
+        }
+
         return {
             name: s.name,
             usn: s.usn,
             mark: mark,
-            isPass: mark >= 35, // Passing mark threshold
+            isPass: isPass,
             overallRank: s.rank,
             subjectRank: 0
         };
@@ -204,7 +214,7 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                                             <td className="nowrap" style={{ fontWeight: 600 }}>{s.name}</td>
                                             <td style={{ textAlign: 'center', fontWeight: 800, color: '#ff4d4d', fontSize: '1.1rem' }}>{s.mark} / 100</td>
                                             <td style={{ textAlign: 'center', color: '#ff9999', fontSize: '0.85rem' }}>
-                                                {35 - s.mark} mark(s) short
+                                                {35 - s.mark > 0 ? `${35 - s.mark} mark(s) short` : 'Subject Failed'}
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                                 <span style={{ 

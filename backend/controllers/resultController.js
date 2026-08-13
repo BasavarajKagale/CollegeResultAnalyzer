@@ -241,9 +241,9 @@ const exportExcel = async (req, res) => {
         sheet.addRow([]); // Blank line
 
         // -------------------------------------------------------------
-        // SECTION 3: SUBJECT STATISTICS SUMMARY MATRIX (PIC 5 LAYOUT)
+        // SECTION 3: SUBJECT STATISTICS SUMMARY MATRIX
         // -------------------------------------------------------------
-        const matrixTitleRow = sheet.addRow(['Subject Statistics Summary Matrix (Pic 5 Layout)']);
+        const matrixTitleRow = sheet.addRow(['Subject Statistics Summary Matrix']);
         matrixTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
         matrixTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
         sheet.mergeCells(matrixTitleRow.number, 1, matrixTitleRow.number, totalSheetCols);
@@ -258,9 +258,7 @@ const exportExcel = async (req, res) => {
             { key: 'failCount', label: 'Fail' },
             { key: 'abCount', label: 'AB' },
             { key: 'withHeldCount', label: 'With Held' },
-            { key: 'passPercentage', label: 'Percentage' },
-            { key: 'staffName', label: 'Staff Name' },
-            { key: 'staffSig', label: 'Staff Signature' }
+            { key: 'passPercentage', label: 'Percentage' }
         ];
 
         const overallBoxValues = {
@@ -276,9 +274,7 @@ const exportExcel = async (req, res) => {
             const rowData = ['', '', m.label];
             subjects.forEach(sub => {
                 let val = '';
-                if (m.key === 'staffName' || m.key === 'staffSig') {
-                    val = '';
-                } else if (m.key === 'passPercentage') {
+                if (m.key === 'passPercentage') {
                     val = `${(sub.passPercentage || 0).toFixed(2)}%`;
                 } else {
                     val = sub[m.key] || 0;
@@ -296,17 +292,18 @@ const exportExcel = async (req, res) => {
             let cIdx = 4;
             subjects.forEach(() => {
                 sheet.mergeCells(row.number, cIdx, row.number, cIdx + 3);
+                row.getCell(cIdx).font = { bold: false }; // Non-bold numbers inside matrix
                 cIdx += 4;
             });
 
-            row.font = { bold: true };
+            row.getCell(3).font = { bold: true }; // Metric label bold
             row.alignment = { vertical: 'middle', horizontal: 'center' };
         });
 
         sheet.addRow([]); sheet.addRow([]); // Blank lines
 
         // -------------------------------------------------------------
-        // SECTION 4: ACADEMIC TOPPERS (HALL OF FAME - PIC 3 LAYOUT)
+        // SECTION 4: ACADEMIC TOPPERS (HALL OF FAME)
         // -------------------------------------------------------------
         const toppersTitleRow = sheet.addRow(['2. Academic Toppers (Hall of Fame)']);
         toppersTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
@@ -324,24 +321,27 @@ const exportExcel = async (req, res) => {
         const top5 = sortedByMarks.slice(0, 5);
 
         top5.forEach((t, idx) => {
-            let classStr = 'Pass Class';
-            if (t.percentage >= 70) classStr = 'FCD (Distinction)';
-            else if (t.percentage >= 60) classStr = 'FC (First Class)';
-            else if (t.percentage >= 50) classStr = 'SC (Second Class)';
+            let classStr = 'Pass';
+            if (t.percentage >= 70) classStr = 'FCD';
+            else if (t.percentage >= 60) classStr = 'FC';
+            else if (t.percentage >= 50) classStr = 'SC';
 
             const r = sheet.addRow([`#${idx + 1}`, t.usn, t.name, '', '', `${t.totalMarks}/${maxTotalMarks}`, `${t.percentage}%`, classStr]);
             sheet.mergeCells(r.number, 3, r.number, 5);
             r.alignment = { vertical: 'middle', horizontal: 'center' };
             r.getCell(1).font = { bold: true, color: { argb: 'FF2563EB' } };
             r.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+            r.getCell(6).font = { bold: false };
+            r.getCell(7).font = { bold: false };
+            r.getCell(8).font = { bold: true };
         });
 
         sheet.addRow([]); sheet.addRow([]); // Blank lines
 
         // -------------------------------------------------------------
-        // SECTION 5: OVERALL CLASS PERFORMANCE STATISTICS (PIC 3 LAYOUT)
+        // SECTION 5: OVERALL CLASS PERFORMANCE STATISTICS & BAR CHART
         // -------------------------------------------------------------
-        const overallTitleRow = sheet.addRow(['3. Overall Class Performance Bar Chart & Statistics']);
+        const overallTitleRow = sheet.addRow(['3. Overall Class Performance Statistics Table']);
         overallTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
         overallTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
         sheet.mergeCells(overallTitleRow.number, 1, overallTitleRow.number, 6);
@@ -360,7 +360,7 @@ const exportExcel = async (req, res) => {
             stats.failCount || 0,
             stats.passCount || 0
         ]);
-        p1Counts.font = { bold: true };
+        p1Counts.font = { bold: false };
         p1Counts.alignment = { vertical: 'middle', horizontal: 'center' };
 
         const tot = stats.totalStudents || 1;
@@ -375,12 +375,24 @@ const exportExcel = async (req, res) => {
         p1Pcts.font = { bold: true, color: { argb: 'FF2563EB' } };
         p1Pcts.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        sheet.addRow([]); sheet.addRow([]); // Blank lines
+        sheet.addRow([]); // Blank line
+
+        // Section 5.1 Banner Heading for Chart 1
+        const chart1HeaderRow = sheet.addRow(['4. Overall Class Performance Bar Chart']);
+        chart1HeaderRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        chart1HeaderRow.alignment = { vertical: 'middle', horizontal: 'left' };
+        sheet.mergeCells(chart1HeaderRow.number, 1, chart1HeaderRow.number, 12);
+        sheet.getRow(chart1HeaderRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+
+        const chart1StartRow = chart1HeaderRow.number + 1;
+        for (let i = 0; i < 16; i++) {
+            sheet.addRow([]);
+        }
 
         // -------------------------------------------------------------
-        // SECTION 6: SUBJECT-WISE PERFORMANCE SUMMARY TABLE (PIC 4 LAYOUT)
+        // SECTION 6: SUBJECT-WISE PERFORMANCE SUMMARY TABLE & BAR CHART
         // -------------------------------------------------------------
-        const subTitleRow = sheet.addRow(['3. Subject-Wise Performance Summary Table']);
+        const subTitleRow = sheet.addRow(['5. Subject-Wise Performance Summary Table']);
         subTitleRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
         subTitleRow.alignment = { vertical: 'middle', horizontal: 'left' };
         sheet.mergeCells(subTitleRow.number, 1, subTitleRow.number, 12);
@@ -410,7 +422,23 @@ const exportExcel = async (req, res) => {
             ]);
             sr.alignment = { vertical: 'middle', horizontal: 'center' };
             sr.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+            sr.font = { bold: false };
+            sr.getCell(1).font = { bold: true };
         });
+
+        sheet.addRow([]); // Blank line
+
+        // Section 6.1 Banner Heading for Chart 2
+        const chart2HeaderRow = sheet.addRow(['6. Subject-Wise Performance Bar Chart Breakdown']);
+        chart2HeaderRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        chart2HeaderRow.alignment = { vertical: 'middle', horizontal: 'left' };
+        sheet.mergeCells(chart2HeaderRow.number, 1, chart2HeaderRow.number, 12);
+        sheet.getRow(chart2HeaderRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+
+        const chart2StartRow = chart2HeaderRow.number + 1;
+        for (let i = 0; i < 18; i++) {
+            sheet.addRow([]);
+        }
 
         // -------------------------------------------------------------
         // APPLY BORDERS & COLUMN WIDTHS
@@ -498,13 +526,12 @@ const exportExcel = async (req, res) => {
 
             if (chart1Buffer) {
                 const imgId1 = workbook.addImage({ buffer: chart1Buffer, extension: 'png' });
-                sheet.addImage(imgId1, `H${overallTitleRow.number}:N${overallTitleRow.number + 15}`);
+                sheet.addImage(imgId1, `A${chart1StartRow}:K${chart1StartRow + 15}`);
             }
 
             if (chart2Buffer) {
                 const imgId2 = workbook.addImage({ buffer: chart2Buffer, extension: 'png' });
-                const startR = subTitleRow.number + subjects.length + 3;
-                sheet.addImage(imgId2, `A${startR}:L${startR + 18}`);
+                sheet.addImage(imgId2, `A${chart2StartRow}:L${chart2StartRow + 17}`);
             }
         } catch (chartErr) {
             console.error('Excel chart embedding skipped:', chartErr);
