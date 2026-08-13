@@ -524,7 +524,14 @@ async function generateResultPDF(result, students, res) {
             const inVal = det.in !== undefined ? det.in : 0;
             const exVal = det.ex !== undefined ? det.ex : 0;
             const resUpper = (det.result || '').toUpperCase();
-            const isSubPass = resUpper ? (resUpper === 'P' || resUpper === 'PASS') : (markVal >= 35 && exVal >= 18);
+            
+            let isSubPass = true;
+            if (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'AB' || resUpper === 'ABSENT' || markVal < 35) {
+                isSubPass = false;
+            } else if ((det.in !== undefined && det.in > 0 && det.in < 18 && (markVal < 35 || resUpper === 'F')) || (det.ex !== undefined && det.ex > 0 && det.ex < 18 && (markVal < 35 || resUpper === 'F'))) {
+                isSubPass = false;
+            }
+
             return {
                 name: st.name,
                 usn: st.usn,

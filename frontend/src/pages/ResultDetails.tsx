@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api, { baseURL } from '../services/api';
+import { socket } from '../services/socket';
 import { FileSpreadsheet, FileText, Trophy, Users, BookOpen, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import SubjectModal from '../components/SubjectModal';
 
 const ResultDetails = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
@@ -22,7 +24,19 @@ const ResultDetails = () => {
             }
         };
         fetchData();
-    }, [id]);
+
+        // Real-time socket event if admin deletes this current result
+        socket.on('result_deleted', ({ id: deletedId }: { id: string }) => {
+            if (deletedId === id) {
+                alert('This result analysis session was deleted by the system administrator.');
+                navigate('/results');
+            }
+        });
+
+        return () => {
+            socket.off('result_deleted');
+        };
+    }, [id, navigate]);
 
     if (loading) return <div style={{ textAlign: 'center', padding: '10rem', fontSize: '1.2rem', color: 'var(--primary)' }}>Processing Data Details...</div>;
     if (!data) return <div style={{ textAlign: 'center', padding: '10rem' }}>Analysis Session Not Found.</div>;

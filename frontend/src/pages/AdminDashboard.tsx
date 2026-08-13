@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
+import { socket } from '../services/socket';
 import { ShieldCheck, LogOut, Trash2, Eye, BarChart3, AlertTriangle } from 'lucide-react';
 import Toast from '../components/Toast';
 
@@ -12,7 +13,7 @@ const AdminDashboard = () => {
     const [deleting, setDeleting] = useState(false);
     const navigate = useNavigate();
 
-    // Check Admin Authentication
+    // Check Admin Authentication & Setup Socket Listeners
     useEffect(() => {
         const isAdmin = localStorage.getItem('adminToken') === 'true';
         if (!isAdmin) {
@@ -21,6 +22,21 @@ const AdminDashboard = () => {
         }
 
         fetchResults();
+
+        // Real-time socket events for admin dashboard
+        socket.on('result_uploaded', (newRes: any) => {
+            setResults(prev => [newRes, ...prev.filter(r => r._id !== newRes._id)]);
+            setToastMsg(`New result processed in real-time: ${newRes.filename}`);
+        });
+
+        socket.on('result_deleted', ({ id }: { id: string }) => {
+            setResults(prev => prev.filter(r => r._id !== id));
+        });
+
+        return () => {
+            socket.off('result_uploaded');
+            socket.off('result_deleted');
+        };
     }, [navigate]);
 
     const fetchResults = async () => {

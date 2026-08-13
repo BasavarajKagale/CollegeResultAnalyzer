@@ -45,6 +45,11 @@ const uploadResult = async (req, res) => {
         
         await Student.insertMany(parsed.studentDocs.map(s => ({ ...s, resultId: savedResult._id })));
 
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('result_uploaded', savedResult);
+        }
+
         res.status(201).json(savedResult);
     } catch (err) {
         console.error('File Processing Error:', err);
@@ -571,6 +576,12 @@ const deleteResult = async (req, res) => {
             return res.status(404).json({ error: 'Result record not found' });
         }
         await Student.deleteMany({ resultId: id });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('result_deleted', { id });
+        }
+
         res.json({ message: 'Result file and all candidate records deleted permanently' });
     } catch (err) {
         console.error('Delete Result Error:', err);

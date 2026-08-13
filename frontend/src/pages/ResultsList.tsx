@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { socket } from '../services/socket';
 import { Calendar, Loader2 } from 'lucide-react';
 
 const ResultsList = () => {
@@ -19,6 +20,19 @@ const ResultsList = () => {
             }
         };
         fetchResults();
+
+        // Real-time updates without page refresh
+        socket.on('result_uploaded', (newRes: any) => {
+            setResults(prev => [newRes, ...prev.filter(r => r._id !== newRes._id)]);
+        });
+        socket.on('result_deleted', ({ id }: { id: string }) => {
+            setResults(prev => prev.filter(r => r._id !== id));
+        });
+
+        return () => {
+            socket.off('result_uploaded');
+            socket.off('result_deleted');
+        };
     }, []);
 
     if (loading) {
