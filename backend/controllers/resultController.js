@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Result = require('../models/Result');
 const Student = require('../models/Student');
 const ExcelJS = require('exceljs');
@@ -68,7 +69,11 @@ const getResults = async (req, res) => {
 
 const getResultById = async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid result ID format' });
+        }
         const result = await Result.findById(req.params.id);
+        if (!result) return res.status(404).json({ error: 'Result not found' });
         const students = await Student.find({ resultId: req.params.id });
         students.sort((a, b) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' }));
         res.json({ result, students });

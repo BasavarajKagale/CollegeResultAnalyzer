@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 import UploadPage from './pages/UploadPage';
@@ -22,6 +22,8 @@ function App() {
           <Route path="/dashboard/:id" element={<div className="container"><Dashboard /></div>} />
           <Route path="/admin/login" element={<div className="container"><AdminLogin /></div>} />
           <Route path="/admin" element={<div className="container"><AdminDashboard /></div>} />
+          <Route path="/admin/*" element={<div className="container"><AdminDashboard /></div>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>
