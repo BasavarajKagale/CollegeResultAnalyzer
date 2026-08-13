@@ -343,7 +343,7 @@ const exportExcel = async (req, res) => {
             r.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
             r.getCell(6).font = { bold: false };
             r.getCell(7).font = { bold: false };
-            r.getCell(8).font = { bold: true };
+            r.getCell(8).font = { bold: false };
         });
 
         sheet.addRow([]); sheet.addRow([]); // Blank lines
