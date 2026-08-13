@@ -126,6 +126,7 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
+                title: { display: true, text: 'Overall Class Performance Bar Chart', font: { size: 14, weight: 'bold' } },
                 legend: { position: 'top', labels: { font: { size: 10, weight: 'bold' } } },
                 datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold', size: 9 } }
             }
@@ -151,6 +152,7 @@ async function generateResultPDF(result, students, res) {
         },
         options: {
             plugins: {
+                title: { display: true, text: 'Subject-Wise Performance Bar Chart Breakdown', font: { size: 14, weight: 'bold' } },
                 legend: { position: 'top', labels: { font: { size: 8, weight: 'bold' }, boxWidth: 12 } },
                 datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold', size: 7.5 } }
             }

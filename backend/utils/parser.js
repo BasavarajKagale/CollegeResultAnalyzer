@@ -425,7 +425,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
             } else if (res === 'W' || res === 'WH' || res === 'WITH HELD' || res === 'WITHHELD') {
                 stat.withHeldCount++;
                 failedSubjectsCount++;
-            } else if (res === 'F' || res === 'FAIL' || mark < 35 || (detail.ex !== undefined && detail.ex > 0 && detail.ex < 18)) {
+            } else if (res === 'F' || res === 'FAIL' || mark < 35 || (detail.ex !== undefined && detail.ex > 0 && detail.ex < 18 && (mark < 35 || res === 'F' || res === 'FAIL'))) {
                 stat.failCount++;
                 failedSubjectsCount++;
             } else {

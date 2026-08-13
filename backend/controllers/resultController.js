@@ -163,13 +163,17 @@ const exportExcel = async (req, res) => {
             const detailsMap = s.subjectDetails || {};
 
             subjects.forEach(sub => {
-                const det = detailsMap[sub.name] || {
-                    in: Math.min(s.marks[sub.name] || 0, 40),
-                    ex: Math.max(0, (s.marks[sub.name] || 0) - 40),
-                    total: s.marks[sub.name] || 0,
-                    result: (s.marks[sub.name] || 0) >= 35 ? 'P' : 'F'
-                };
-                rowData.push(det.in, det.ex, det.total, det.result);
+                const det = detailsMap[sub.name] || {};
+                const totalVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
+                const inVal = det.in !== undefined ? det.in : '';
+                const exVal = det.ex !== undefined ? det.ex : '';
+                let resVal = (det.result || '').toUpperCase();
+                if (!resVal) {
+                    resVal = totalVal >= 35 ? 'P' : 'F';
+                } else if (resVal === 'PASS') resVal = 'P';
+                else if (resVal === 'FAIL') resVal = 'F';
+
+                rowData.push(inVal, exVal, totalVal, resVal);
             });
 
             rowData.push(s.totalMarks, `${s.percentage}%`, s.failedSubjectsCount || 0, s.remark || (s.isPass ? 'PASS' : 'FAIL'));
@@ -181,15 +185,18 @@ const exportExcel = async (req, res) => {
             let currC = 4;
             subjects.forEach(sub => {
                 const det = detailsMap[sub.name] || {};
+                const totalVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
                 const inVal = det.in !== undefined ? det.in : 0;
                 const exVal = det.ex !== undefined ? det.ex : 0;
-                const totalVal = det.total !== undefined ? det.total : (s.marks[sub.name] || 0);
-                const resVal = (det.result || '').toUpperCase() || (totalVal >= 35 && exVal >= 18 ? 'P' : 'F');
+                let resVal = (det.result || '').toUpperCase();
+                if (!resVal) {
+                    resVal = totalVal >= 35 ? 'P' : 'F';
+                }
 
-                const isInFail = inVal > 0 && inVal < 18;
-                const isExFail = exVal > 0 && exVal < 18;
-                const isTotalFail = totalVal < 35 || isExFail || isInFail || resVal === 'F' || resVal === 'FAIL';
                 const isResFail = resVal === 'F' || resVal === 'FAIL' || resVal === 'AB';
+                const isTotalFail = totalVal < 35 || isResFail;
+                const isInFail = inVal > 0 && inVal < 18 && isTotalFail;
+                const isExFail = exVal > 0 && exVal < 18 && isTotalFail;
 
                 const lightRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 const darkRedFont = { color: { argb: 'FF991B1B' }, bold: true };
@@ -206,7 +213,7 @@ const exportExcel = async (req, res) => {
                     addedRow.getCell(currC + 2).fill = lightRedFill;
                     addedRow.getCell(currC + 2).font = darkRedFont;
                 }
-                if (isResFail) {
+                if (isResFail || isTotalFail) {
                     addedRow.getCell(currC + 3).fill = lightRedFill;
                     addedRow.getCell(currC + 3).font = darkRedFont;
                 }
@@ -434,7 +441,21 @@ const exportExcel = async (req, res) => {
                         { label: 'Percentage (%)', backgroundColor: '#B91C1C', data: [null, parseFloat(((stats.fcdCount / tot) * 100).toFixed(2)), parseFloat(((stats.fcCount / tot) * 100).toFixed(2)), parseFloat(((stats.scCount / tot) * 100).toFixed(2)), parseFloat(((stats.failCount / tot) * 100).toFixed(2)), parseFloat((stats.passPercentage || 0).toFixed(2))] }
                     ]
                 },
-                options: { plugins: { title: { display: true, text: 'Overall Class Performance Bar Chart (Pic 3)' } } }
+                options: {
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Overall Class Performance Bar Chart',
+                            font: { size: 15, weight: 'bold' }
+                        },
+                        datalabels: {
+                            display: true,
+                            anchor: 'end',
+                            align: 'top',
+                            font: { weight: 'bold', size: 9 }
+                        }
+                    }
+                }
             };
 
             const chart2Config = {
@@ -453,7 +474,21 @@ const exportExcel = async (req, res) => {
                         { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat((s.passPercentage || 0).toFixed(2))) }
                     ]
                 },
-                options: { plugins: { title: { display: true, text: 'Subject-Wise Performance Bar Chart Breakdown (Pic 4)' } } }
+                options: {
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Subject-Wise Performance Bar Chart Breakdown',
+                            font: { size: 15, weight: 'bold' }
+                        },
+                        datalabels: {
+                            display: true,
+                            anchor: 'end',
+                            align: 'top',
+                            font: { weight: 'bold', size: 8 }
+                        }
+                    }
+                }
             };
 
             const [chart1Buffer, chart2Buffer] = await Promise.all([

@@ -226,15 +226,18 @@ const ResultDetails = () => {
                                             if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A') {
                                                 isSubFail = true;
                                                 reasonTag = '(AB)';
-                                            } else if (det.in !== undefined && det.in >= 0 && det.in < 18) {
-                                                isSubFail = true;
-                                                reasonTag = '(IN)';
-                                            } else if (det.ex !== undefined && det.ex >= 0 && det.ex < 18) {
-                                                isSubFail = true;
-                                                reasonTag = '(EX)';
                                             } else if (markVal < 35 || resUpper === 'F' || resUpper === 'FAIL') {
                                                 isSubFail = true;
-                                                reasonTag = (det.in !== undefined && det.in < 18) ? '(IN)' : '(EX)';
+                                                if (det.in !== undefined && det.in > 0 && det.in < 18) {
+                                                    reasonTag = '(IN)';
+                                                } else {
+                                                    reasonTag = '(EX)';
+                                                }
+                                            } else if ((det.in !== undefined && det.in > 0 && det.in < 18) || (det.ex !== undefined && det.ex > 0 && det.ex < 18)) {
+                                                if (resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
+                                                    isSubFail = true;
+                                                    reasonTag = (det.in !== undefined && det.in > 0 && det.in < 18) ? '(IN)' : '(EX)';
+                                                }
                                             }
 
                                             const displayText = isSubFail ? `${markVal}${reasonTag}` : `${markVal}`;
