@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://img.icons8.com/color/128/000000/combo-chart.png" alt="Logo" width="100"/>
   <h1>🎓 College Result Analyzer</h1>
-  <p><i>An intelligent, real-time platform to analyze, visualize, and generate executive dossier reports for college academic results.</i></p>
+  <p><i>An intelligent, real-time platform to analyze, visualize, and generate executive dossier reports (Excel, PDF & PowerPoint) for college academic results.</i></p>
 
   <!-- Badges -->
   <p>
@@ -18,7 +18,7 @@
 
 ## 🌟 Overview
 
-The **College Result Analyzer** is a full-stack web application designed to simplify the complex task of processing student academic results. It accepts raw result documents in **PDF (.pdf)**, **Excel (.xlsx, .xls)**, or **CSV (.csv)** formats, parses them securely in the backend using an intelligent pattern-recognition engine, and provides an interactive real-time dashboard filled with subject-wise analytics, academic toppers, and executive downloadable reports.
+The **College Result Analyzer** is a full-stack web application designed to simplify the complex task of processing student academic results. It accepts raw result documents in **PDF (.pdf)**, **Excel (.xlsx, .xls)**, or **CSV (.csv)** formats, parses them securely in the backend using an intelligent pattern-recognition engine, and provides an interactive real-time dashboard filled with subject-wise analytics, academic toppers, and executive downloadable reports across **Excel**, **PDF**, and **PowerPoint (.pptx)** formats.
 
 ---
 
@@ -29,8 +29,9 @@ The **College Result Analyzer** is a full-stack web application designed to simp
 - 📡 **Real-Time Socket Synchronization:** Built with `Socket.IO` to broadcast upload and deletion events live. Results list and Admin Portal update instantly without needing a manual page refresh.
 - 📊 **Interactive Subject Analytics Modal:** Click any subject card to inspect pass rate, fail rate, highest mark, average mean, full rankings, and isolated failed candidates list.
 - 🏆 **Academic Toppers (Hall of Fame):** Identifies top batch performers and highlights `FCD`, `FC`, `SC`, and `Pass` classifications.
-- 📄 **Executive Excel Dossier Export:** Download clean single-sheet Excel reports featuring stacked bar graphs under dedicated text headings, bold metric headers, non-bold numbers, and candidate directories (`TOTAL` $\rightarrow$ `PERCENTAGE` $\rightarrow$ `NO OF SUBJECTS FAILED` $\rightarrow$ `REMARK`).
-- 📄 **Executive PDF Dossier Export:** Programmatically generated multi-page vector PDF reports with accurate fail evaluation and signature endorsement blocks.
+- 📄 **Executive Excel Dossier Export:** Download clean single-sheet Excel reports featuring stacked bar graphs under dedicated text headings, bold metric headers, yellow fill (`#FFF2CC`) for absent blocks (`A`, ` `, ` `, `A`), non-bold numbers, and full candidate directories.
+- 📄 **Executive PDF Dossier Export:** Programmatically generated multi-page vector PDF reports with accurate fail evaluation, subject statistics matrices, and signature endorsement blocks.
+- 📽️ **Executive PowerPoint (.pptx) Export:** Generates standardized 5-slide departmental review presentations with dynamic title slides, clustered bar charts with exact decimal labels, class toppers, and subject breakdown tables with blank staff fields for manual faculty signature.
 - 🛡️ **Secure Admin Portal:** Dedicated administrator management portal with persistent token storage and seamless SPA route refresh handling (`/admin`).
 
 ---
@@ -46,20 +47,36 @@ The **College Result Analyzer** is a full-stack web application designed to simp
 | **Database** | MongoDB & Mongoose 9 | Flexible NoSQL data storage for variable subject structures and student records. |
 | **Excel Generator** | ExcelJS 4 | Programmatic Excel workbook creation, cell formatting, and image embedding. |
 | **PDF Generator** | PDFKit 0.18 | Programmatic vector PDF creation, custom page breaks, and layout control. |
-| **Charts Engine** | QuickChart.io & Chart.js | Renders Chart.js configurations into PNG buffers with data labels. |
+| **PowerPoint Generator** | PptxGenJS 3.12 | Programmatic presentation generation, clustered bar charts with decimal formatting, and table layout styling. |
+| **Charts Engine** | Chart.js 4 & Lucide React | Visual charts, progress bars, and iconography across UI and export dossiers. |
 
 ---
 
-## 📐 Evaluation & Pass / Fail Rules
+## 📐 Evaluation & Score Classification Rules
 
-The platform strictly enforces standard university evaluation criteria:
-- **Subject Passing Criteria:** Minimum Total $\ge 35$, External ($\text{EX}$) $\ge 18$ (when external exams are conducted), Internal ($\text{IN}$) $\ge 18$.
-- **Absence ($\text{AB}$):** Any candidate marked $\text{AB}$ or $\text{ABSENT}$ is classified as **FAIL**.
-- **Overall Batch Classification:**
-  - $\ge 70\%$ $\rightarrow$ **FCD** (First Class with Distinction)
-  - $\ge 60\%$ $\rightarrow$ **FC** (First Class)
-  - $\ge 50\%$ $\rightarrow$ **SC** (Second Class)
-  - $< 50\%$ $\rightarrow$ **Pass**
+The platform enforces standardized academic evaluation criteria:
+
+### 1. Subject-Wise Passing Criteria
+- **Pass Threshold:** Minimum Total Marks $\ge 35$.
+- **Appeared vs. Absent:** Candidates marked Absent ($\text{AB}$ / $\text{A}$) are excluded from the appeared count:
+  $$\text{Appeared Count} = \text{Total Registered} - \text{Absent (AB)}$$
+  $$\text{Passing Percentage (\%)} = \frac{\text{Total Pass}}{\text{Appeared Count}} \times 100$$
+
+### 2. Subject Score Classifications
+| Category | Condition (Total Marks $T$) |
+| :--- | :--- |
+| **Distinction (FCD)** | $\text{Total} \ge 70$ |
+| **First Class (FC)** | $60 \le \text{Total} < 70$ |
+| **Second Class (SC)** | $36 \le \text{Total} < 60$ |
+| **Pass (Just Pass)** | $\text{Total} = 35$ strictly |
+| **Fail** | $\text{Total} < 35$ (or Absent $\text{AB}$) |
+
+### 3. Overall Batch Classifications
+- **First Class with Distinction (FCD):** $\ge 70.0\%$
+- **First Class (FC):** $60.0\% - 69.99\%$
+- **Second Class (SC):** $50.0\% - 59.99\%$
+- **Pass Class:** $40.0\% - 49.99\%$
+- **Fail:** Failed in $\ge 1$ subject or overall percentage $< 40\%$
 
 ---
 
@@ -112,5 +129,5 @@ This project includes a root `render.yaml` Blueprint file for seamless automated
 ---
 
 <div align="center">
-  <i>https://collegeresultanalyzer-1.onrender.com/</i>
+  <i>Live Demo: <a href="https://collegeresultanalyzer-1.onrender.com/" target="_blank">https://collegeresultanalyzer-1.onrender.com/</a></i>
 </div>
