@@ -137,20 +137,18 @@ function parseMatrix(matrix) {
 
     let extractedCollegeName = '';
     if (headerRowIdx > 0) {
-        const topBannerCells = [];
         for (let r = 0; r < headerRowIdx; r++) {
             cleanMatrix[r].forEach(c => {
-                if (c && c.length > 2 && !topBannerCells.includes(c)) {
-                    topBannerCells.push(c);
+                if (c && c.length > 3 && /college|institute|university|technology|engineering|vidyapeeth/i.test(c)) {
+                    if (!extractedCollegeName) {
+                        extractedCollegeName = c;
+                    }
                 }
             });
         }
-        if (topBannerCells.length > 0) {
-            extractedCollegeName = topBannerCells.join(' - ');
-        }
     }
     if (!extractedCollegeName || extractedCollegeName.length < 5) {
-        extractedCollegeName = "KLE Society's KLE College of Engineering and Technology, Chikodi";
+        extractedCollegeName = "KLE College of Engineering and Technology, Chikodi";
     }
 
     // 3. Check for Sub-header Row (e.g., IN, EX, T, R under subject codes in Pic 5 format)
@@ -324,34 +322,45 @@ function parseMatrix(matrix) {
         const subjectDetails = {};
 
         subjectBlocks.forEach(sub => {
-            let inVal = sub.inCol !== -1 ? parseInt(row[sub.inCol], 10) : 0;
-            if (isNaN(inVal)) inVal = 0;
+            const rawIn = sub.inCol !== -1 ? String(row[sub.inCol] ?? '').trim() : '';
+            const rawEx = sub.exCol !== -1 ? String(row[sub.exCol] ?? '').trim() : '';
+            const rawTotal = sub.totalCol !== -1 ? String(row[sub.totalCol] ?? '').trim() : '';
+            let rawRes = sub.resultCol !== -1 ? String(row[sub.resultCol] ?? '').trim().toUpperCase() : '';
 
-            let exVal = sub.exCol !== -1 ? parseInt(row[sub.exCol], 10) : 0;
-            if (isNaN(exVal)) exVal = 0;
+            const isAbsent = rawIn.toUpperCase() === 'A' || rawIn.toUpperCase() === 'AB' || 
+                             rawEx.toUpperCase() === 'A' || rawEx.toUpperCase() === 'AB' || 
+                             rawTotal.toUpperCase() === 'A' || rawTotal.toUpperCase() === 'AB' ||
+                             rawRes === 'A' || rawRes === 'AB' || rawRes === 'ABSENT' || rawRes === 'ABS';
 
-            let totalVal = sub.totalCol !== -1 ? parseInt(row[sub.totalCol], 10) : NaN;
+            let inVal = parseInt(rawIn, 10);
+            if (isNaN(inVal)) inVal = isAbsent ? 'A' : 0;
+
+            let exVal = parseInt(rawEx, 10);
+            if (isNaN(exVal)) exVal = isAbsent ? '' : 0;
+
+            let totalVal = parseInt(rawTotal, 10);
             if (isNaN(totalVal)) {
-                totalVal = inVal + exVal;
+                totalVal = isAbsent ? 0 : (typeof inVal === 'number' && typeof exVal === 'number' ? inVal + exVal : 0);
             }
 
-            let resultVal = sub.resultCol !== -1 ? (row[sub.resultCol] || '').trim().toUpperCase() : '';
-            if (!resultVal) {
+            let resultVal = rawRes;
+            if (isAbsent) {
+                resultVal = 'A';
+            } else if (!resultVal) {
                 resultVal = totalVal >= 35 ? 'P' : 'F';
             } else if (resultVal === 'PASS') {
                 resultVal = 'P';
             } else if (resultVal === 'FAIL') {
                 resultVal = 'F';
-            } else if (resultVal === 'ABSENT' || resultVal === 'ABS') {
-                resultVal = 'AB';
             }
 
-            marks[sub.code] = totalVal;
+            marks[sub.code] = isAbsent ? 0 : totalVal;
             subjectDetails[sub.code] = {
-                in: inVal,
-                ex: exVal,
-                total: totalVal,
-                result: resultVal
+                in: isAbsent ? 'A' : inVal,
+                ex: isAbsent ? '' : exVal,
+                total: isAbsent ? '' : totalVal,
+                result: isAbsent ? 'A' : resultVal,
+                isAbsent: isAbsent
             };
         });
 
@@ -416,32 +425,24 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
             const res = (detail.result || '').toUpperCase();
             studentTotal += mark;
 
-            stat.appearedCount++;
-            if (mark > stat.highestMarks) stat.highestMarks = mark;
-
-            if (res === 'AB' || res === 'A') {
+            if (res === 'AB' || res === 'A' || detail.isAbsent) {
                 stat.abCount++;
                 failedSubjectsCount++;
-            } else if (res === 'W' || res === 'WH' || res === 'WITH HELD' || res === 'WITHHELD') {
-                stat.withHeldCount++;
-                failedSubjectsCount++;
-            } else if (res === 'F' || res === 'FAIL' || mark < 35 || (detail.ex !== undefined && detail.ex > 0 && detail.ex < 18 && (mark < 35 || res === 'F' || res === 'FAIL'))) {
-                stat.failCount++;
-                failedSubjectsCount++;
             } else {
-                // Pass category breakdown per subject
-                if (mark >= 70) stat.fcdCount++;
-                else if (mark >= 60) stat.fcCount++;
-                else if (mark >= 50) stat.scCount++;
-                else stat.passClassCount++;
-            }
-        });
+                stat.appearedCount++;
+                if (mark > stat.highestMarks) stat.highestMarks = mark;
 
-        // Subject total pass count per subject = FCD + FC + SC + PassClass
-        subjectNames.forEach(sub => {
-            const stat = subjectStatsMap[sub];
-            stat.totalPassCount = stat.fcdCount + stat.fcCount + stat.scCount + stat.passClassCount;
-            stat.passPercentage = stat.appearedCount > 0 ? (stat.totalPassCount / stat.appearedCount) * 100 : 0;
+                if (res === 'F' || res === 'FAIL' || mark < 35) {
+                    stat.failCount++;
+                    failedSubjectsCount++;
+                } else {
+                    // Pass category breakdown per subject
+                    if (mark >= 70) stat.fcdCount++;
+                    else if (mark >= 60) stat.fcCount++;
+                    else if (mark > 35) stat.scCount++;
+                    else if (mark === 35) stat.passClassCount++; // Strictly 35
+                }
+            }
         });
 
         const maxTotal = subjectNames.length * 100;
@@ -470,6 +471,13 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
             isPass: isPass,
             remark: remark
         };
+    });
+
+    // Subject total pass count per subject = FCD + FC + SC + PassClass (calculated once after all students processed)
+    subjectNames.forEach(sub => {
+        const stat = subjectStatsMap[sub];
+        stat.totalPassCount = stat.fcdCount + stat.fcCount + stat.scCount + stat.passClassCount;
+        stat.passPercentage = stat.appearedCount > 0 ? (stat.totalPassCount / stat.appearedCount) * 100 : 0;
     });
 
     // Calculate Ranks (Sorted descending by totalMarks)
@@ -747,154 +755,6 @@ async function parsePDFBuffer(buffer) {
     });
 
     return buildResultDocument(finalStudents, subjectNames);
-}
-
-/**
- * Standardize metrics, topper ranks, subject pass rates, overall pass percentage
- */
-function buildResultDocument(rawStudents, subjectNames) {
-    if (rawStudents.length === 0) {
-        throw new Error('No valid student records detected in the uploaded file.');
-    }
-
-    const subjectStatsMap = {};
-    subjectNames.forEach(sub => {
-        subjectStatsMap[sub] = {
-            name: sub,
-            appearedCount: 0,
-            fcdCount: 0,
-            fcCount: 0,
-            scCount: 0,
-            passClassCount: 0,
-            abCount: 0,
-            withHeldCount: 0,
-            failCount: 0,
-            totalPassCount: 0,
-            passPercentage: 0,
-            highestMarks: 0
-        };
-    });
-
-    let overallFCD = 0;
-    let overallFC = 0;
-    let overallSC = 0;
-    let overallPassClass = 0;
-    let overallTotalPass = 0;
-
-    const studentDocs = rawStudents.map(student => {
-        let studentTotal = 0;
-        let failedSubjectsCount = 0;
-        const detailsMap = student.subjectDetails || {};
-
-        subjectNames.forEach(sub => {
-            const stat = subjectStatsMap[sub];
-            const detail = detailsMap[sub] || {
-                in: 0,
-                ex: 0,
-                total: Number(student.marks[sub]) || 0,
-                result: (Number(student.marks[sub]) || 0) >= 35 ? 'P' : 'F'
-            };
-
-            const mark = Number(detail.total) || 0;
-            const res = (detail.result || '').toUpperCase();
-            studentTotal += mark;
-
-            stat.appearedCount++;
-            if (mark > stat.highestMarks) stat.highestMarks = mark;
-
-            if (res === 'AB' || res === 'A') {
-                stat.abCount++;
-                failedSubjectsCount++;
-            } else if (res === 'W' || res === 'WH' || res === 'WITH HELD' || res === 'WITHHELD') {
-                stat.withHeldCount++;
-                failedSubjectsCount++;
-            } else if (res === 'F' || mark < 35) {
-                stat.failCount++;
-                failedSubjectsCount++;
-            } else {
-                // Pass category breakdown per subject
-                if (mark >= 70) stat.fcdCount++;
-                else if (mark >= 60) stat.fcCount++;
-                else if (mark >= 50) stat.scCount++;
-                else stat.passClassCount++;
-            }
-        });
-
-        // Subject total pass count per subject = FCD + FC + SC + PassClass
-        subjectNames.forEach(sub => {
-            const stat = subjectStatsMap[sub];
-            stat.totalPassCount = stat.fcdCount + stat.fcCount + stat.scCount + stat.passClassCount;
-            stat.passPercentage = stat.appearedCount > 0 ? (stat.totalPassCount / stat.appearedCount) * 100 : 0;
-        });
-
-        const maxTotal = subjectNames.length * 100;
-        const percentage = maxTotal > 0 ? parseFloat(((studentTotal / maxTotal) * 100).toFixed(2)) : 0;
-
-        // Overall passing criteria: 0 failed subjects AND percentage >= 40%
-        const isPass = failedSubjectsCount === 0 && percentage >= 40.0;
-        const remark = isPass ? 'PASS' : 'FAIL';
-
-        if (isPass) {
-            overallTotalPass++;
-            if (percentage >= 70.0) overallFCD++;
-            else if (percentage >= 60.0) overallFC++;
-            else if (percentage >= 50.0) overallSC++;
-            else overallPassClass++;
-        }
-
-        return {
-            name: student.name,
-            usn: student.usn,
-            marks: student.marks,
-            subjectDetails: detailsMap,
-            totalMarks: studentTotal,
-            percentage: percentage,
-            failedSubjectsCount: failedSubjectsCount,
-            isPass: isPass,
-            remark: remark
-        };
-    });
-
-    // Calculate Ranks (Sorted descending by totalMarks)
-    studentDocs.sort((a, b) => b.totalMarks - a.totalMarks);
-    studentDocs.forEach((s, idx) => {
-        s.rank = idx + 1;
-    });
-
-    // Subject stats array
-    const subjectStats = subjectNames.map(sub => subjectStatsMap[sub]);
-
-    // Toppers
-    const toppers = studentDocs.slice(0, 3).map(s => ({
-        rank: s.rank,
-        name: s.name,
-        usn: s.usn,
-        totalMarks: s.totalMarks,
-        percentage: s.percentage
-    }));
-
-    // Overall Batch Statistics (matching Pic 1 & Pic 2)
-    const totalStudents = rawStudents.length;
-    const overallFail = totalStudents - overallTotalPass;
-
-    const overallStats = {
-        totalStudents: totalStudents,
-        appearedCount: totalStudents,
-        fcdCount: overallFCD,
-        fcCount: overallFC,
-        scCount: overallSC,
-        passClassCount: overallPassClass,
-        failCount: overallFail,
-        passCount: overallTotalPass,
-        passPercentage: totalStudents > 0 ? parseFloat(((overallTotalPass / totalStudents) * 100).toFixed(2)) : 0
-    };
-
-    return {
-        subjects: subjectStats,
-        toppers: toppers,
-        overallStats: overallStats,
-        studentDocs: studentDocs
-    };
 }
 
 module.exports = {

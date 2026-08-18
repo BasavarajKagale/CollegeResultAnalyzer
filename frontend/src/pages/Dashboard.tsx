@@ -148,7 +148,7 @@ const Dashboard = () => {
         datasets: [
             {
                 label: 'Passed Candidates',
-                data: result.subjects.map((s: any) => s.passCount),
+                data: result.subjects.map((s: any) => s.totalPassCount ?? s.passCount ?? Math.max(0, (s.appearedCount || students.length || 0) - (s.failCount || 0))),
                 backgroundColor: 'rgba(40, 167, 69, 0.75)',
                 borderColor: '#28a745',
                 borderWidth: 1.5,
@@ -156,7 +156,7 @@ const Dashboard = () => {
             },
             {
                 label: 'Failed Candidates',
-                data: result.subjects.map((s: any) => s.failCount),
+                data: result.subjects.map((s: any) => s.failCount || 0),
                 backgroundColor: 'rgba(220, 53, 69, 0.75)',
                 borderColor: '#dc3545',
                 borderWidth: 1.5,
@@ -356,11 +356,13 @@ const Dashboard = () => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                         {result.subjects.map((sub: any) => {
+                            const passedCount = sub.totalPassCount ?? sub.passCount ?? Math.max(0, (sub.appearedCount || students.length || 0) - (sub.failCount || 0));
+                            const failedCount = sub.failCount || 0;
                             const subDoughnutData = {
-                                labels: [`Passed (${sub.passCount})`, `Failed (${sub.failCount})`],
+                                labels: [`Passed (${passedCount})`, `Failed (${failedCount})`],
                                 datasets: [
                                     {
-                                        data: [sub.passCount, sub.failCount],
+                                        data: [passedCount, failedCount],
                                         backgroundColor: ['#28a745', '#dc3545'],
                                         borderColor: ['#1e7e34', '#bd2130'],
                                         borderWidth: 1

@@ -177,7 +177,7 @@ const LandingPage = () => {
         { icon: <Zap size={32} />, title: "Swift Processing", desc: "Parse massive Excel result sheets in milliseconds." },
         { icon: <BarChart3 size={32} />, title: "Detailed Analytics", desc: "Automatic calculation of pass rates, totals, and rankings." },
         { icon: <PieIcon size={32} />, title: "Visual Insights", desc: "Interactive dashboards with performance heatmaps." },
-        { icon: <FileDown size={32} />, title: "Smart Exports", desc: "One-click professional PDF and Excel report generation." },
+        { icon: <FileDown size={32} />, title: "Smart Exports", desc: "One-click professional PDF, Excel, and PowerPoint (PPT) presentation generation." },
         { icon: <ShieldCheck size={32} />, title: "Data Integrity", desc: "Robust engine handling complex and large-scale data." },
         { icon: <GraduationCap size={32} />, title: "Academic Success", desc: "Tailored for batch performance and topper recognition." }
     ];

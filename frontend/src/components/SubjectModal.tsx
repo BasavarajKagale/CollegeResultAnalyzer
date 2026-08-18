@@ -19,8 +19,6 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
         let isPass = true;
         if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || resUpper === 'F' || resUpper === 'FAIL' || mark < 35) {
             isPass = false;
-        } else if ((det.in !== undefined && det.in > 0 && det.in < 18 && (mark < 35 || resUpper === 'F')) || (det.ex !== undefined && det.ex > 0 && det.ex < 18 && (mark < 35 || resUpper === 'F'))) {
-            isPass = false;
         }
 
         return {

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api, { baseURL } from '../services/api';
 import { socket } from '../services/socket';
-import { FileSpreadsheet, FileText, Trophy, Users, BookOpen, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, Presentation, Trophy, Users, BookOpen, ExternalLink, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import SubjectModal from '../components/SubjectModal';
 
 const ResultDetails = () => {
@@ -38,6 +38,61 @@ const ResultDetails = () => {
         };
     }, [id, navigate]);
 
+    // Live accurate computed statistics per subject (excluding absent from appeared)
+    const computedSubStatsMap = useMemo(() => {
+        if (!data?.result?.subjects || !data?.students) return {};
+        const map: Record<string, any> = {};
+        data.result.subjects.forEach((sub: any) => {
+            let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
+            data.students.forEach((st: any) => {
+                const det = st.subjectDetails?.[sub.name] || {};
+                const resUpper = (det.result || '').toUpperCase();
+                const inStr = String(det.in ?? '').trim().toUpperCase();
+                const isAbsent = det.isAbsent || resUpper === 'AB' || resUpper === 'A' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
+                const isWithHeld = resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+                const mark = isAbsent ? 0 : (st.marks && st.marks[sub.name] !== undefined ? Number(st.marks[sub.name]) : (det.total !== undefined ? Number(det.total) : 0));
+
+                if (isAbsent) {
+                    ab++;
+                } else if (isWithHeld) {
+                    withHeld++;
+                    fail++;
+                    appeared++;
+                } else {
+                    appeared++;
+                    if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                        fail++;
+                    } else if (mark >= 70) {
+                        fcd++;
+                    } else if (mark >= 60) {
+                        fc++;
+                    } else if (mark > 35) {
+                        sc++;
+                    } else if (mark === 35) {
+                        passClass++; // Strictly 35
+                    }
+                }
+            });
+
+            const totPass = fcd + fc + sc + passClass;
+            const pct = appeared > 0 ? (totPass / appeared) * 100 : 0;
+
+            map[sub.name] = {
+                appearedCount: appeared,
+                fcdCount: fcd,
+                fcCount: fc,
+                scCount: sc,
+                passClassCount: passClass,
+                failCount: fail,
+                abCount: ab,
+                withHeldCount: withHeld,
+                totalPassCount: totPass,
+                passPercentage: pct
+            };
+        });
+        return map;
+    }, [data]);
+
     if (loading) return <div style={{ textAlign: 'center', padding: '10rem', fontSize: '1.2rem', color: 'var(--primary)' }}>Processing Data Details...</div>;
     if (!data) return <div style={{ textAlign: 'center', padding: '10rem' }}>Analysis Session Not Found.</div>;
 
@@ -45,9 +100,16 @@ const ResultDetails = () => {
 
     return (
         <div style={{ paddingBottom: '5rem' }}>
-            {/* Header section with responsive title & truncation */}
+            {/* Header section with responsive title & action buttons */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2.5rem' }}>
                 <div style={{ minWidth: 0, flex: '1 1 300px' }}>
+                    <button 
+                        onClick={() => navigate('/dashboard')} 
+                        className="btn btn-secondary" 
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', fontSize: '0.85rem', marginBottom: '0.8rem' }}
+                    >
+                        <ArrowLeft size={16} /> Back to Dashboard
+                    </button>
                     <h2 
                         className="title" 
                         style={{ 
@@ -65,12 +127,15 @@ const ResultDetails = () => {
                     <p style={{ opacity: 0.6, fontSize: '0.9rem' }}>Comprehensive Performance & Batch Analysis</p>
                 </div>
                 
-                <div style={{ display: 'flex', gap: '1rem', flexShrink: 0 }}>
-                    <a href={`${baseURL}/results/${id}/download/excel`} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', flexShrink: 0 }}>
+                    <a href={`${baseURL}/results/${id}/download/excel`} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.2rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                         <FileSpreadsheet size={16} /> Export Excel
                     </a>
-                    <a href={`${baseURL}/results/${id}/download/pdf`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.4rem' }}>
+                    <a href={`${baseURL}/results/${id}/download/pdf`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.2rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                         <FileText size={16} /> PDF Report
+                    </a>
+                    <a href={`${baseURL}/results/${id}/download/ppt`} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.6rem 1.2rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Presentation size={16} /> Export PPT
                     </a>
                 </div>
             </div>
@@ -127,8 +192,8 @@ const ResultDetails = () => {
                 </div>
             </div>
 
-            {/* Subject Overview Quick Cards */}
-            <div className="card" style={{ marginBottom: '3rem' }}>
+            {/* Subject-Wise Analytics Cards */}
+            <div style={{ marginBottom: '3rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ fontSize: '1.4rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <BookOpen size={20} color="var(--primary)" /> Subject-Wise Analytics & Failed Students
@@ -138,7 +203,11 @@ const ResultDetails = () => {
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.2rem' }}>
                     {result.subjects.map((sub: any) => {
-                        const failPct = (100 - sub.passPercentage).toFixed(1);
+                        const subStat = computedSubStatsMap[sub.name] || sub;
+                        const passPct = Number(subStat.passPercentage !== undefined ? subStat.passPercentage : sub.passPercentage);
+                        const failPct = (100 - passPct).toFixed(1);
+                        const passCount = subStat.totalPassCount !== undefined ? subStat.totalPassCount : (sub.totalPassCount || sub.passCount || 0);
+                        const failCount = subStat.failCount !== undefined ? subStat.failCount : (sub.failCount || 0);
                         return (
                             <div 
                                 key={sub.name}
@@ -159,17 +228,17 @@ const ResultDetails = () => {
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8rem' }}>
                                     <span style={{ color: '#28a745', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                        <CheckCircle2 size={12} /> Pass: {sub.passPercentage.toFixed(1)}% ({sub.totalPassCount || sub.passCount || 0})
+                                        <CheckCircle2 size={12} /> Pass: {passPct.toFixed(1)}% ({passCount})
                                     </span>
                                     <span style={{ color: '#dc3545', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                        <AlertTriangle size={12} /> Fail: {failPct}% ({sub.failCount || 0})
+                                        <AlertTriangle size={12} /> Fail: {failPct}% ({failCount})
                                     </span>
                                 </div>
 
                                 {/* Dual Progress Bar */}
                                 <div style={{ height: '6px', background: 'rgba(220, 53, 69, 0.3)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
-                                    <div style={{ width: `${sub.passPercentage}%`, height: '100%', background: '#28a745' }} />
-                                    <div style={{ width: `${100 - sub.passPercentage}%`, height: '100%', background: '#dc3545' }} />
+                                    <div style={{ width: `${passPct}%`, height: '100%', background: '#28a745' }} />
+                                    <div style={{ width: `${100 - passPct}%`, height: '100%', background: '#dc3545' }} />
                                 </div>
 
                                 <div style={{ marginTop: '0.8rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#aaa' }}>
@@ -195,20 +264,14 @@ const ResultDetails = () => {
                                 <th style={{ padding: '0.8rem 0.5rem', textAlign: 'left' }}>Std Name</th>
                                 <th style={{ padding: '0.8rem 0.5rem', textAlign: 'left' }}>USN</th>
                                 {result.subjects.map((s: any) => (
-                                    <th 
-                                        key={s.name} 
-                                        onClick={() => setSelectedSubject(s.name)}
-                                        className="subject-badge"
-                                        title={`Click for ${s.name} Subject Dashboard`}
-                                        style={{ textAlign: 'center', cursor: 'pointer', padding: '0.8rem 0.4rem', fontSize: '0.75rem' }}
-                                    >
-                                        {s.name}
+                                    <th key={s.name} style={{ padding: '0.8rem 0.4rem', textAlign: 'center', width: '65px' }}>
+                                        {s.name.split(' ')[0]}
                                     </th>
                                 ))}
-                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Total</th>
-                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Percentage</th>
-                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>No of Subjects Failed</th>
-                                <th style={{ textAlign: 'center', padding: '0.8rem 0.5rem' }}>Remark</th>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '85px' }}>Total</th>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '80px' }}>Percentage</th>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '85px' }}>No of Subjects Failed</th>
+                                <th style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '80px' }}>Remark</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -218,7 +281,7 @@ const ResultDetails = () => {
                                         const m = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
                                         const d = s.subjectDetails?.[sub.name] || {};
                                         const r = (d.result || '').toUpperCase();
-                                        return r === 'AB' || r === 'F' || r === 'FAIL' || m < 35 || (d.ex !== undefined && d.ex < 18) || (d.in !== undefined && d.in < 18);
+                                        return r === 'AB' || r === 'A' || r === 'F' || r === 'FAIL' || m < 35;
                                     }).length
                                 );
                                 const isFailedOverall = !s.isPass || s.remark === 'FAIL';
@@ -233,39 +296,45 @@ const ResultDetails = () => {
                                             const markVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
                                             const det = s.subjectDetails?.[sub.name] || {};
                                             const resUpper = (det.result || '').toUpperCase();
+                                            const inVal = typeof det.in === 'number' ? det.in : (Number(det.in) || 0);
+                                            const exVal = typeof det.ex === 'number' ? det.ex : (Number(det.ex) || 0);
 
                                             let isSubFail = false;
+                                            let isAbsent = false;
                                             let reasonTag = '';
 
-                                            if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A') {
+                                            if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || det.isAbsent) {
                                                 isSubFail = true;
+                                                isAbsent = true;
                                                 reasonTag = '(AB)';
-                                            } else if (markVal < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                                            } else if (resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
                                                 isSubFail = true;
-                                                if (det.in !== undefined && det.in > 0 && det.in < 18) {
+                                                if (det.in !== undefined && inVal > 0 && inVal < 18) {
                                                     reasonTag = '(IN)';
+                                                } else if (det.ex !== undefined && exVal < 18) {
+                                                    reasonTag = '(EX)';
                                                 } else {
                                                     reasonTag = '(EX)';
                                                 }
-                                            } else if ((det.in !== undefined && det.in > 0 && det.in < 18) || (det.ex !== undefined && det.ex > 0 && det.ex < 18)) {
+                                            } else if ((det.in !== undefined && inVal > 0 && inVal < 18) || (det.ex !== undefined && exVal > 0 && exVal < 18)) {
                                                 if (resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
                                                     isSubFail = true;
-                                                    reasonTag = (det.in !== undefined && det.in > 0 && det.in < 18) ? '(IN)' : '(EX)';
+                                                    reasonTag = (det.in !== undefined && inVal > 0 && inVal < 18) ? '(IN)' : '(EX)';
                                                 }
                                             }
 
-                                            const displayText = isSubFail ? `${markVal}${reasonTag}` : `${markVal}`;
+                                            const displayText = isAbsent ? `${markVal}(AB)` : (isSubFail ? `${markVal}${reasonTag}` : `${markVal}`);
 
                                             return (
                                                 <td 
                                                     key={sub.name} 
-                                                    title={isSubFail ? `Failed: ${markVal} marks ${reasonTag}` : `Passed ${sub.name}: ${markVal}`}
+                                                    title={isAbsent ? `Absent (${markVal} marks)` : (isSubFail ? `Failed: ${markVal} marks ${reasonTag}` : `Passed ${sub.name}: ${markVal}`)}
                                                     style={{ 
                                                         textAlign: 'center', 
                                                         padding: '0.6rem 0.4rem',
-                                                        backgroundColor: isSubFail ? 'rgba(220, 53, 69, 0.25)' : 'transparent',
-                                                        color: isSubFail ? '#ff6b6b' : '#fff',
-                                                        fontWeight: isSubFail ? 700 : 400
+                                                        backgroundColor: isAbsent ? '#FFF2CC' : (isSubFail ? 'rgba(220, 53, 69, 0.25)' : 'transparent'),
+                                                        color: isAbsent ? '#854D0E' : (isSubFail ? '#ff6b6b' : '#fff'),
+                                                        fontWeight: (isSubFail || isAbsent) ? 700 : 400
                                                     }}
                                                 >
                                                     {displayText}
@@ -318,7 +387,7 @@ const ResultDetails = () => {
                                 { label: 'FCD', key: 'fcdCount', overall: result.overallStats.fcdCount || 0 },
                                 { label: 'FC', key: 'fcCount', overall: result.overallStats.fcCount || 0 },
                                 { label: 'SC', key: 'scCount', overall: result.overallStats.scCount || 0 },
-                                { label: 'pass', key: 'passClassCount', overall: result.overallStats.passClassCount || 0 },
+                                { label: 'Pass', key: 'passClassCount', overall: result.overallStats.passClassCount || 0 },
                                 { label: 'Fail', key: 'failCount', overall: result.overallStats.failCount || 0 },
                                 { label: 'AB', key: 'abCount', overall: '-' },
                                 { label: 'With Held', key: 'withHeldCount', overall: '-' },
@@ -327,10 +396,11 @@ const ResultDetails = () => {
                                 <tr key={m.label} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                                     <td style={{ textAlign: 'left', padding: '0.6rem', fontWeight: 700 }}>{m.label}</td>
                                     {result.subjects.map((sub: any) => {
+                                        const subStat = computedSubStatsMap[sub.name] || sub;
                                         let displayVal = '-';
                                         if (m.isBlank) displayVal = ''; // Blank for lectures to manually fill in excel later
-                                        else if (m.isPct) displayVal = `${(sub.passPercentage || 0).toFixed(2)}%`;
-                                        else displayVal = sub[m.key] !== undefined ? sub[m.key] : 0;
+                                        else if (m.isPct) displayVal = `${(subStat.passPercentage !== undefined ? subStat.passPercentage : (sub.passPercentage || 0)).toFixed(2)}%`;
+                                        else displayVal = subStat[m.key] !== undefined ? subStat[m.key] : (sub[m.key] || 0);
                                         return (
                                             <td key={sub.name} style={{ padding: '0.6rem' }}>{displayVal}</td>
                                         );

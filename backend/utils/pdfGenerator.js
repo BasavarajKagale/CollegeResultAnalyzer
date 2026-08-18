@@ -95,6 +95,57 @@ async function generateResultPDF(result, students, res) {
     const totStudents = stats.totalStudents || students.length || 1;
     const maxTotalMarks = subjects.length * 100 || 100;
 
+    // Compute live accurate subject statistics (excluding absent from appeared)
+    const computedSubStatsMap = {};
+    subjects.forEach(sub => {
+        let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
+        students.forEach(st => {
+            const det = st.subjectDetails?.[sub.name] || {};
+            const resUpper = (det.result || '').toUpperCase();
+            const inStr = String(det.in ?? '').trim().toUpperCase();
+            const isAbsent = det.isAbsent || resUpper === 'AB' || resUpper === 'A' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
+            const isWithHeld = resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+            const mark = isAbsent ? 0 : (st.marks && st.marks[sub.name] !== undefined ? Number(st.marks[sub.name]) : (det.total !== undefined ? Number(det.total) : 0));
+
+            if (isAbsent) {
+                ab++;
+            } else if (isWithHeld) {
+                withHeld++;
+                fail++;
+                appeared++;
+            } else {
+                appeared++;
+                if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                    fail++;
+                } else if (mark >= 70) {
+                    fcd++;
+                } else if (mark >= 60) {
+                    fc++;
+                } else if (mark > 35) {
+                    sc++;
+                } else if (mark === 35) {
+                    passClass++; // Strictly 35
+                }
+            }
+        });
+
+        const totPass = fcd + fc + sc + passClass;
+        const pct = appeared > 0 ? (totPass / appeared) * 100 : 0;
+
+        computedSubStatsMap[sub.name] = {
+            appearedCount: appeared,
+            fcdCount: fcd,
+            fcCount: fc,
+            scCount: sc,
+            passClassCount: passClass,
+            failCount: fail,
+            abCount: ab,
+            withHeldCount: withHeld,
+            totalPassCount: totPass,
+            passPercentage: pct
+        };
+    });
+
     // ---------------------------------------------------------
     // CHART CONFIGURATIONS (Pic 1 and Pic 3 Bar Charts)
     // ---------------------------------------------------------
@@ -382,6 +433,7 @@ async function generateResultPDF(result, students, res) {
     currentY += 18;
 
     subjects.forEach((sub, idx) => {
+        const sStat = computedSubStatsMap[sub.name] || sub;
         checkPageBreak(18, '3. Subject Summary Table (Continued)');
         const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
         doc.rect(margin, currentY, contentWidth, 18).fill(rowBg);
@@ -394,34 +446,34 @@ async function generateResultPDF(result, students, res) {
         doc.fillColor('#64748B').fontSize(7).font('Helvetica').text('', rx + 2, currentY + 5, { width: p4Cols[1].width - 4 }); // Blank Staff Name
         rx += p4Cols[1].width;
 
-        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sub.fcdCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[2].width - 4, align: 'center' });
+        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sStat.fcdCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[2].width - 4, align: 'center' });
         rx += p4Cols[2].width;
 
-        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sub.fcCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[3].width - 4, align: 'center' });
+        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sStat.fcCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[3].width - 4, align: 'center' });
         rx += p4Cols[3].width;
 
-        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sub.scCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[4].width - 4, align: 'center' });
+        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sStat.scCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[4].width - 4, align: 'center' });
         rx += p4Cols[4].width;
 
-        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sub.passClassCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[5].width - 4, align: 'center' });
+        doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sStat.passClassCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[5].width - 4, align: 'center' });
         rx += p4Cols[5].width;
 
-        doc.fillColor('#06B6D4').fontSize(7).font('Helvetica-Bold').text(`${sub.abCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[6].width - 4, align: 'center' });
+        doc.fillColor('#06B6D4').fontSize(7).font('Helvetica-Bold').text(`${sStat.abCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[6].width - 4, align: 'center' });
         rx += p4Cols[6].width;
 
-        doc.fillColor('#F97316').fontSize(7).font('Helvetica-Bold').text(`${sub.withHeldCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[7].width - 4, align: 'center' });
+        doc.fillColor('#F97316').fontSize(7).font('Helvetica-Bold').text(`${sStat.withHeldCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[7].width - 4, align: 'center' });
         rx += p4Cols[7].width;
 
-        doc.fillColor('#B91C1C').fontSize(7).font('Helvetica-Bold').text(`${sub.failCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[8].width - 4, align: 'center' });
+        doc.fillColor('#B91C1C').fontSize(7).font('Helvetica-Bold').text(`${sStat.failCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[8].width - 4, align: 'center' });
         rx += p4Cols[8].width;
 
-        doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text(`${sub.totalPassCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[9].width - 4, align: 'center' });
+        doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text(`${sStat.totalPassCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[9].width - 4, align: 'center' });
         rx += p4Cols[9].width;
 
-        doc.fillColor('#2563EB').fontSize(7.5).font('Helvetica-Bold').text(`${(sub.passPercentage || 0).toFixed(2)}`, rx + 2, currentY + 5, { width: p4Cols[10].width - 4, align: 'center' });
+        doc.fillColor('#2563EB').fontSize(7.5).font('Helvetica-Bold').text(`${(sStat.passPercentage || 0).toFixed(2)}`, rx + 2, currentY + 5, { width: p4Cols[10].width - 4, align: 'center' });
         rx += p4Cols[10].width;
 
-        doc.fillColor('#0F172A').fontSize(7).font('Helvetica').text(`${sub.appearedCount || stats.totalStudents}`, rx + 2, currentY + 5, { width: p4Cols[11].width - 4, align: 'center' });
+        doc.fillColor('#0F172A').fontSize(7).font('Helvetica').text(`${sStat.appearedCount !== undefined ? sStat.appearedCount : (sub.appearedCount || stats.totalStudents)}`, rx + 2, currentY + 5, { width: p4Cols[11].width - 4, align: 'center' });
 
         currentY += 18;
     });
@@ -482,10 +534,11 @@ async function generateResultPDF(result, students, res) {
 
         let cx = margin + metricLabelColW;
         subjects.forEach(sub => {
+            const sStat = computedSubStatsMap[sub.name] || sub;
             let displayVal = '';
             if (m.key === 'staffName' || m.key === 'staffSig') displayVal = '';
-            else if (m.key === 'passPercentage') displayVal = `${(sub.passPercentage || 0).toFixed(1)}`;
-            else displayVal = `${sub[m.key] || 0}`;
+            else if (m.key === 'passPercentage') displayVal = `${(sStat.passPercentage || 0).toFixed(1)}`;
+            else displayVal = `${sStat[m.key] !== undefined ? sStat[m.key] : (sub[m.key] || 0)}`;
 
             doc.fillColor('#334155').fontSize(7).font('Helvetica').text(displayVal, cx, currentY + 5, { width: subColW, align: 'center' });
             cx += subColW;
@@ -526,9 +579,7 @@ async function generateResultPDF(result, students, res) {
             const resUpper = (det.result || '').toUpperCase();
             
             let isSubPass = true;
-            if (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'AB' || resUpper === 'ABSENT' || markVal < 35) {
-                isSubPass = false;
-            } else if ((det.in !== undefined && det.in > 0 && det.in < 18 && (markVal < 35 || resUpper === 'F')) || (det.ex !== undefined && det.ex > 0 && det.ex < 18 && (markVal < 35 || resUpper === 'F'))) {
+            if (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || markVal < 35) {
                 isSubPass = false;
             }
 

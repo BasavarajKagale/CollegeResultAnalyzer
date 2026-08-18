@@ -6,6 +6,7 @@ const PDFDocument = require('pdfkit');
 const https = require('https');
 const { parseResultFile } = require('../utils/parser');
 const { generateResultPDF } = require('../utils/pdfGenerator');
+const { generateResultPPT } = require('../utils/pptGenerator');
 
 function fetchChartImage(chartConfig, width = 600, height = 340) {
     return new Promise((resolve) => {
@@ -174,58 +175,84 @@ const exportExcel = async (req, res) => {
 
             subjects.forEach(sub => {
                 const det = detailsMap[sub.name] || {};
-                const totalVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
-                const inVal = det.in !== undefined ? det.in : '';
-                const exVal = det.ex !== undefined ? det.ex : '';
-                let resVal = (det.result || '').toUpperCase();
-                if (!resVal) {
-                    resVal = totalVal >= 35 ? 'P' : 'F';
-                } else if (resVal === 'PASS') resVal = 'P';
-                else if (resVal === 'FAIL') resVal = 'F';
+                const resUpper = (det.result || '').toUpperCase();
+                const inStr = String(det.in ?? '').trim().toUpperCase();
+                const isAbsent = det.isAbsent || resUpper === 'A' || resUpper === 'AB' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
 
-                rowData.push(inVal, exVal, totalVal, resVal);
+                if (isAbsent) {
+                    rowData.push('A', '', '', 'A');
+                } else {
+                    const totalVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total !== undefined ? det.total : 0);
+                    const inVal = det.in !== undefined ? det.in : '';
+                    const exVal = det.ex !== undefined ? det.ex : '';
+                    let resVal = resUpper;
+                    if (!resVal) {
+                        resVal = (typeof totalVal === 'number' && totalVal >= 35) ? 'P' : 'F';
+                    } else if (resVal === 'PASS') resVal = 'P';
+                    else if (resVal === 'FAIL') resVal = 'F';
+
+                    rowData.push(inVal, exVal, totalVal, resVal);
+                }
             });
 
-            rowData.push(s.totalMarks, `${s.percentage}%`, s.failedSubjectsCount || 0, s.remark || (s.isPass ? 'PASS' : 'FAIL'));
+            rowData.push(s.totalMarks || 0, `${s.percentage || 0}%`, s.failedSubjectsCount || 0, s.remark || (s.isPass ? 'PASS' : 'FAIL'));
 
             const addedRow = sheet.addRow(rowData);
             addedRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            // Highlight failing sub-cells
+            // Highlight sub-cells
             let currC = 4;
             subjects.forEach(sub => {
                 const det = detailsMap[sub.name] || {};
-                const totalVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
-                const inVal = det.in !== undefined ? det.in : 0;
-                const exVal = det.ex !== undefined ? det.ex : 0;
-                let resVal = (det.result || '').toUpperCase();
-                if (!resVal) {
-                    resVal = totalVal >= 35 ? 'P' : 'F';
-                }
+                const resUpper = (det.result || '').toUpperCase();
+                const inStr = String(det.in ?? '').trim().toUpperCase();
+                const isAbsent = det.isAbsent || resUpper === 'A' || resUpper === 'AB' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
 
-                const isResFail = resVal === 'F' || resVal === 'FAIL' || resVal === 'AB';
-                const isTotalFail = totalVal < 35 || isResFail;
-                const isInFail = inVal > 0 && inVal < 18 && isTotalFail;
-                const isExFail = exVal > 0 && exVal < 18 && isTotalFail;
+                if (isAbsent) {
+                    // Cell 1 (IN): 'A' with light yellow fill (#FFF2CC) matching Pic 1
+                    const yellowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+                    const amberFont = { color: { argb: 'FF92400E' }, bold: true };
+                    addedRow.getCell(currC).fill = yellowFill;
+                    addedRow.getCell(currC).font = amberFont;
 
-                const lightRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-                const darkRedFont = { color: { argb: 'FF991B1B' }, bold: true };
+                    // Cell 2 (EX): blank ''
+                    // Cell 3 (T): blank ''
 
-                if (isInFail) {
-                    addedRow.getCell(currC).fill = lightRedFill;
-                    addedRow.getCell(currC).font = darkRedFont;
-                }
-                if (isExFail) {
-                    addedRow.getCell(currC + 1).fill = lightRedFill;
-                    addedRow.getCell(currC + 1).font = darkRedFont;
-                }
-                if (isTotalFail) {
-                    addedRow.getCell(currC + 2).fill = lightRedFill;
-                    addedRow.getCell(currC + 2).font = darkRedFont;
-                }
-                if (isResFail || isTotalFail) {
-                    addedRow.getCell(currC + 3).fill = lightRedFill;
-                    addedRow.getCell(currC + 3).font = darkRedFont;
+                    // Cell 4 (R): 'A' with dark bold font (no pink/red fill)
+                    addedRow.getCell(currC + 3).font = { color: { argb: 'FF000000' }, bold: true };
+                } else {
+                    const totalVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
+                    const inVal = typeof det.in === 'number' ? det.in : 0;
+                    const exVal = typeof det.ex === 'number' ? det.ex : 0;
+                    let resVal = (det.result || '').toUpperCase();
+                    if (!resVal) {
+                        resVal = totalVal >= 35 ? 'P' : 'F';
+                    }
+
+                    const isResFail = resVal === 'F' || resVal === 'FAIL';
+                    const isTotalFail = totalVal < 35 || isResFail;
+                    const isInFail = inVal > 0 && inVal < 18 && isTotalFail;
+                    const isExFail = exVal > 0 && exVal < 18 && isTotalFail;
+
+                    const lightRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+                    const darkRedFont = { color: { argb: 'FF991B1B' }, bold: true };
+
+                    if (isInFail) {
+                        addedRow.getCell(currC).fill = lightRedFill;
+                        addedRow.getCell(currC).font = darkRedFont;
+                    }
+                    if (isExFail) {
+                        addedRow.getCell(currC + 1).fill = lightRedFill;
+                        addedRow.getCell(currC + 1).font = darkRedFont;
+                    }
+                    if (isTotalFail) {
+                        addedRow.getCell(currC + 2).fill = lightRedFill;
+                        addedRow.getCell(currC + 2).font = darkRedFont;
+                    }
+                    if (isResFail || isTotalFail) {
+                        addedRow.getCell(currC + 3).fill = lightRedFill;
+                        addedRow.getCell(currC + 3).font = darkRedFont;
+                    }
                 }
 
                 currC += 4;
@@ -259,6 +286,57 @@ const exportExcel = async (req, res) => {
         sheet.mergeCells(matrixTitleRow.number, 1, matrixTitleRow.number, totalSheetCols);
         sheet.getRow(matrixTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
 
+        // Dynamically calculate live subject statistics (Strictly: FCD>=70, FC: 60-69, SC: 36-59, Pass: ===35, Fail: <35)
+        const computedSubStatsMap = {};
+        subjects.forEach(sub => {
+            let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
+            students.forEach(st => {
+                const det = st.subjectDetails?.[sub.name] || {};
+                const resUpper = (det.result || '').toUpperCase();
+                const inStr = String(det.in ?? '').trim().toUpperCase();
+                const isAbsent = det.isAbsent || resUpper === 'AB' || resUpper === 'A' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
+                const isWithHeld = resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+                const mark = isAbsent ? 0 : (st.marks && st.marks[sub.name] !== undefined ? Number(st.marks[sub.name]) : (det.total !== undefined ? Number(det.total) : 0));
+
+                if (isAbsent) {
+                    ab++;
+                } else if (isWithHeld) {
+                    withHeld++;
+                    fail++;
+                    appeared++;
+                } else {
+                    appeared++;
+                    if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                        fail++;
+                    } else if (mark >= 70) {
+                        fcd++;
+                    } else if (mark >= 60) {
+                        fc++;
+                    } else if (mark > 35) {
+                        sc++;
+                    } else if (mark === 35) {
+                        passClass++; // Strictly 35
+                    }
+                }
+            });
+
+            const totPass = fcd + fc + sc + passClass;
+            const pct = appeared > 0 ? (totPass / appeared) * 100 : 0;
+
+            computedSubStatsMap[sub.name] = {
+                appearedCount: appeared,
+                fcdCount: fcd,
+                fcCount: fc,
+                scCount: sc,
+                passClassCount: passClass,
+                failCount: fail,
+                abCount: ab,
+                withHeldCount: withHeld,
+                totalPassCount: totPass,
+                passPercentage: pct
+            };
+        });
+
         const pic2Metrics = [
             { key: 'appearedCount', label: 'Appeared' },
             { key: 'fcdCount', label: 'FCD' },
@@ -283,11 +361,12 @@ const exportExcel = async (req, res) => {
         pic2Metrics.forEach((m, mIdx) => {
             const rowData = ['', '', m.label];
             subjects.forEach(sub => {
+                const subStat = computedSubStatsMap[sub.name] || sub;
                 let val = '';
                 if (m.key === 'passPercentage') {
-                    val = `${(sub.passPercentage || 0).toFixed(2)}%`;
+                    val = `${(subStat.passPercentage || 0).toFixed(2)}%`;
                 } else {
-                    val = sub[m.key] || 0;
+                    val = subStat[m.key] !== undefined ? subStat[m.key] : (sub[m.key] || 0);
                 }
                 rowData.push(val, '', '', '');
             });
@@ -416,19 +495,20 @@ const exportExcel = async (req, res) => {
         subSumHeader.eachCell(c => c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } });
 
         subjects.forEach(sub => {
+            const sStat = computedSubStatsMap[sub.name] || sub;
             const sr = sheet.addRow([
                 sub.name,
                 '', // Staff Name blank for manual entry
-                sub.fcdCount || 0,
-                sub.fcCount || 0,
-                sub.scCount || 0,
-                sub.passClassCount || 0,
-                sub.abCount || 0,
-                sub.withHeldCount || 0,
-                sub.failCount || 0,
-                sub.totalPassCount || 0,
-                `${(sub.passPercentage || 0).toFixed(2)}%`,
-                sub.appearedCount || stats.totalStudents || 0
+                sStat.fcdCount || 0,
+                sStat.fcCount || 0,
+                sStat.scCount || 0,
+                sStat.passClassCount || 0,
+                sStat.abCount || 0,
+                sStat.withHeldCount || 0,
+                sStat.failCount || 0,
+                sStat.totalPassCount || 0,
+                `${(sStat.passPercentage || 0).toFixed(2)}%`,
+                sStat.appearedCount !== undefined ? sStat.appearedCount : (sub.appearedCount || stats.totalStudents || 0)
             ]);
             sr.alignment = { vertical: 'middle', horizontal: 'center' };
             sr.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
@@ -573,6 +653,22 @@ const exportPDF = async (req, res) => {
     }
 };
 
+const exportPPT = async (req, res) => {
+    try {
+        const result = await Result.findById(req.params.id);
+        if (!result) {
+            return res.status(404).json({ error: 'Result record not found' });
+        }
+        const students = await Student.find({ resultId: req.params.id });
+        students.sort((a, b) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' }));
+
+        return generateResultPPT(result, students, res);
+    } catch (err) {
+        console.error('PPT Generation Error:', err);
+        res.status(500).json({ error: 'Server error generating PPT presentation' });
+    }
+};
+
 const deleteResult = async (req, res) => {
     try {
         const { id } = req.params;
@@ -620,6 +716,7 @@ module.exports = {
     getResultById,
     exportExcel,
     exportPDF,
+    exportPPT,
     deleteResult,
     adminLogin
 };

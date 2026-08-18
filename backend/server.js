@@ -43,9 +43,11 @@ app.get('/health', (req, res) => res.send('API is running'));
 const frontendDist = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendDist)) {
     app.use(express.static(frontendDist));
-    app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api') || req.path === '/health') return next();
-        res.sendFile(path.join(frontendDist, 'index.html'));
+    app.use((req, res, next) => {
+        if (req.method === 'GET' && !req.path.startsWith('/api') && req.path !== '/health') {
+            return res.sendFile(path.join(frontendDist, 'index.html'));
+        }
+        next();
     });
 }
 

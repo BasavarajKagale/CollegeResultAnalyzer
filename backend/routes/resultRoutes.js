@@ -6,6 +6,7 @@ const {
     getResultById, 
     exportExcel, 
     exportPDF,
+    exportPPT,
     deleteResult,
     adminLogin
 } = require('../controllers/resultController');
@@ -21,6 +22,7 @@ router.get('/', getResults);
 router.get('/:id', getResultById);
 router.get('/:id/download/excel', exportExcel);
 router.get('/:id/download/pdf', exportPDF);
+router.get('/:id/download/ppt', exportPPT);
 router.delete('/:id', deleteResult);
 
 module.exports = router;
