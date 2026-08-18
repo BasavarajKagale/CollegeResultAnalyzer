@@ -26,11 +26,14 @@ The **College Result Analyzer** is a full-stack web application designed to simp
 
 - 📑 **Universal Multi-Format Support:** Seamlessly process PDF (.pdf), Excel (.xlsx, .xls), and CSV (.csv) result files.
 - 🧠 **Smart Matrix Parsing Engine:** Automatically skips college title banners, detects USNs (`2KD23CS018`), extracts student names, and parses single-column or 4-column (`IN`, `EX`, `T`, `R`) mark layouts.
+- 🎯 **Advanced Status Intelligence (Withheld & Absent):**
+  - **Withheld (`WH` / `#7CBCE8`):** Accurately detects university withheld results (`W`, `WH`, `WITH HELD`), displays dedicated Sky Blue badge styling, preserves internal marks while keeping total/external cells blank, and excludes pure withheld students from backlog fail tallies (`-`).
+  - **Absent (`AB` / `#C58CB5`):** Recognizes absent candidates across internal/external blocks with dedicated Muted Mauve styling and exclusion from pass-rate appeared denominator.
 - 📡 **Real-Time Socket Synchronization:** Built with `Socket.IO` to broadcast upload and deletion events live. Results list and Admin Portal update instantly without needing a manual page refresh.
-- 📊 **Interactive Subject Analytics Modal:** Click any subject card to inspect pass rate, fail rate, highest mark, average mean, full rankings, and isolated failed candidates list.
+- 📊 **Interactive Subject Analytics Modal:** Click any subject card to inspect pass rate, fail rate, highest mark, average mean, full rankings, isolated failed candidates list, and a dedicated **Withheld Candidates** tab.
 - 🏆 **Academic Toppers (Hall of Fame):** Identifies top batch performers and highlights `FCD`, `FC`, `SC`, and `Pass` classifications.
-- 📄 **Executive Excel Dossier Export:** Download clean single-sheet Excel reports featuring stacked bar graphs under dedicated text headings, bold metric headers, yellow fill (`#FFF2CC`) for absent blocks (`A`, ` `, ` `, `A`), non-bold numbers, and full candidate directories.
-- 📄 **Executive PDF Dossier Export:** Programmatically generated multi-page vector PDF reports with accurate fail evaluation, subject statistics matrices, and signature endorsement blocks.
+- 📄 **Executive Excel Dossier Export:** Download clean single-sheet Excel reports featuring stacked bar graphs under dedicated text headings, bold metric headers, Sky Blue `#7CBCE8` for Withheld cells, Muted Mauve `#C58CB5` for Absent blocks, non-bold numbers, and full candidate directories.
+- 📄 **Executive PDF Dossier Export:** Programmatically generated multi-page vector PDF reports with accurate fail evaluation, subject statistics matrices, dark goldenrod (`#B8860B`) fail series, and signature endorsement blocks.
 - 📽️ **Executive PowerPoint (.pptx) Export:** Generates standardized 5-slide departmental review presentations with dynamic title slides, clustered bar charts with exact decimal labels, class toppers, and subject breakdown tables with blank staff fields for manual faculty signature.
 - 🛡️ **Secure Admin Portal:** Dedicated administrator management portal with persistent token storage and seamless SPA route refresh handling (`/admin`).
 

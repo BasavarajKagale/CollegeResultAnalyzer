@@ -128,21 +128,44 @@ const Dashboard = () => {
         }
     };
 
-    // 1. Overall Pass vs Fail Doughnut Data
+    // Extract student counts for charts
+    const passedCount = students.filter((s: any) => s.isPass && s.remark !== 'WITHHELD').length;
+    const withheldCount = students.filter((s: any) => s.remark === 'WITHHELD' || (s.subjectDetails && Object.values(s.subjectDetails).some((d: any) => d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(String(d?.result || '').toUpperCase())))).length;
+    const failedCount = students.filter((s: any) => !s.isPass && s.remark !== 'WITHHELD' && !(s.subjectDetails && Object.values(s.subjectDetails).some((d: any) => d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(String(d?.result || '').toUpperCase())))).length;
+
+    // 1. Overall Pass vs Fail (+ Withheld) Doughnut Data
+    const overallLabels = [`Passed (${passedCount})`];
+    const overallData = [passedCount];
+    const overallBg = ['#28a745'];
+    const overallBorder = ['#1e7e34'];
+
+    if (failedCount > 0) {
+        overallLabels.push(`Failed (${failedCount})`);
+        overallData.push(failedCount);
+        overallBg.push('#dc3545');
+        overallBorder.push('#bd2130');
+    }
+    if (withheldCount > 0) {
+        overallLabels.push(`Withheld (${withheldCount})`);
+        overallData.push(withheldCount);
+        overallBg.push('#7CBCE8'); // #7CBCE8 Sky Blue
+        overallBorder.push('#5BA0D1');
+    }
+
     const overallDoughnutData = {
-        labels: [`Passed (${result.overallStats.passCount})`, `Failed (${result.overallStats.failCount})`],
+        labels: overallLabels,
         datasets: [
             {
-                data: [result.overallStats.passCount, result.overallStats.failCount],
-                backgroundColor: ['#28a745', '#dc3545'],
-                borderColor: ['#1e7e34', '#bd2130'],
+                data: overallData,
+                backgroundColor: overallBg,
+                borderColor: overallBorder,
                 borderWidth: 2,
                 hoverOffset: 10
             },
         ],
     };
 
-    // 2. Subject Pass vs Fail Dual Bar Data
+    // 2. Subject Pass vs Fail (+ Withheld) Comparison Bar Data
     const subjectPassFailData = {
         labels: result.subjects.map((s: any) => s.name),
         datasets: [
@@ -156,9 +179,17 @@ const Dashboard = () => {
             },
             {
                 label: 'Failed Candidates',
-                data: result.subjects.map((s: any) => s.failCount || 0),
+                data: result.subjects.map((s: any) => Math.max(0, (s.failCount || 0) - (s.withHeldCount || 0))),
                 backgroundColor: 'rgba(220, 53, 69, 0.75)',
                 borderColor: '#dc3545',
+                borderWidth: 1.5,
+                borderRadius: 6,
+            },
+            {
+                label: 'Withheld Candidates',
+                data: result.subjects.map((s: any) => s.withHeldCount || 0),
+                backgroundColor: 'rgba(124, 188, 232, 0.75)',
+                borderColor: '#7CBCE8',
                 borderWidth: 1.5,
                 borderRadius: 6,
             }
@@ -202,27 +233,39 @@ const Dashboard = () => {
     };
 
     // 4. Grade Breakdown Data
-    let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failed = 0;
+    let distinction = 0, firstClass = 0, secondClass = 0, passClass = 0, failed = 0, withheld = 0;
     students.forEach((s: any) => {
-        if (!s.isPass) failed++;
+        const isWH = s.remark === 'WITHHELD' || (s.subjectDetails && Object.values(s.subjectDetails).some((d: any) => d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(String(d?.result || '').toUpperCase())));
+        if (isWH) withheld++;
+        else if (!s.isPass) failed++;
         else if (s.percentage >= 75) distinction++;
         else if (s.percentage >= 60) firstClass++;
         else if (s.percentage >= 50) secondClass++;
         else passClass++;
     });
 
+    const gradeLabels = [
+        `Distinction 75%+ (${distinction})`, 
+        `First Class 60-74% (${firstClass})`, 
+        `Second Class 50-59% (${secondClass})`, 
+        `Pass Class 35-49% (${passClass})`, 
+        `Failed (${failed})`
+    ];
+    const gradeData = [distinction, firstClass, secondClass, passClass, failed];
+    const gradeBg = ['#D4AF37', '#28a745', '#17a2b8', '#ffc107', '#dc3545'];
+
+    if (withheld > 0) {
+        gradeLabels.push(`Withheld (${withheld})`);
+        gradeData.push(withheld);
+        gradeBg.push('#7CBCE8');
+    }
+
     const gradeBreakdownData = {
-        labels: [
-            `Distinction 75%+ (${distinction})`, 
-            `First Class 60-74% (${firstClass})`, 
-            `Second Class 50-59% (${secondClass})`, 
-            `Pass Class 35-49% (${passClass})`, 
-            `Failed (${failed})`
-        ],
+        labels: gradeLabels,
         datasets: [
             {
-                data: [distinction, firstClass, secondClass, passClass, failed],
-                backgroundColor: ['#D4AF37', '#28a745', '#17a2b8', '#ffc107', '#dc3545'],
+                data: gradeData,
+                backgroundColor: gradeBg,
                 borderWidth: 1.5,
                 hoverOffset: 8
             }
@@ -356,15 +399,35 @@ const Dashboard = () => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                         {result.subjects.map((sub: any) => {
+                            const subWithheldCount = sub.withHeldCount || 0;
                             const passedCount = sub.totalPassCount ?? sub.passCount ?? Math.max(0, (sub.appearedCount || students.length || 0) - (sub.failCount || 0));
-                            const failedCount = sub.failCount || 0;
+                            const failedCount = Math.max(0, (sub.failCount || 0) - subWithheldCount);
+
+                            const subLabels = [`Passed (${passedCount})`];
+                            const subData = [passedCount];
+                            const subBg = ['#28a745'];
+                            const subBorder = ['#1e7e34'];
+
+                            if (failedCount > 0) {
+                                subLabels.push(`Failed (${failedCount})`);
+                                subData.push(failedCount);
+                                subBg.push('#dc3545');
+                                subBorder.push('#bd2130');
+                            }
+                            if (subWithheldCount > 0) {
+                                subLabels.push(`Withheld (${subWithheldCount})`);
+                                subData.push(subWithheldCount);
+                                subBg.push('#7CBCE8'); // Sky Blue
+                                subBorder.push('#5BA0D1');
+                            }
+
                             const subDoughnutData = {
-                                labels: [`Passed (${passedCount})`, `Failed (${failedCount})`],
+                                labels: subLabels,
                                 datasets: [
                                     {
-                                        data: [passedCount, failedCount],
-                                        backgroundColor: ['#28a745', '#dc3545'],
-                                        borderColor: ['#1e7e34', '#bd2130'],
+                                        data: subData,
+                                        backgroundColor: subBg,
+                                        borderColor: subBorder,
                                         borderWidth: 1
                                     }
                                 ]
@@ -402,13 +465,18 @@ const Dashboard = () => {
                                         />
                                     </div>
 
-                                    <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.8rem', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                                         <span style={{ color: '#28a745', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                             <CheckCircle size={12} /> {sub.passPercentage.toFixed(1)}% Pass
                                         </span>
                                         <span style={{ color: '#dc3545', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                             <AlertTriangle size={12} /> {failPct}% Fail
                                         </span>
+                                        {subWithheldCount > 0 && (
+                                            <span style={{ color: '#7CBCE8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                <AlertTriangle size={12} /> {subWithheldCount} WH
+                                            </span>
+                                        )}
                                     </div>
 
                                     <div style={{ marginTop: '0.8rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>

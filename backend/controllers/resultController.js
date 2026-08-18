@@ -172,14 +172,20 @@ const exportExcel = async (req, res) => {
         students.forEach((s, sIdx) => {
             const rowData = [sIdx + 1, s.name, s.usn];
             const detailsMap = s.subjectDetails || {};
+            let hasWithHeldStudent = s.remark === 'WITHHELD';
 
             subjects.forEach(sub => {
                 const det = detailsMap[sub.name] || {};
                 const resUpper = (det.result || '').toUpperCase();
                 const inStr = String(det.in ?? '').trim().toUpperCase();
-                const isAbsent = det.isAbsent || resUpper === 'A' || resUpper === 'AB' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
+                const isWithHeld = det.isWithHeld || resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+                const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'A' || resUpper === 'AB' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB');
 
-                if (isAbsent) {
+                if (isWithHeld) {
+                    hasWithHeldStudent = true;
+                    const inVal = det.in !== undefined && det.in !== '' ? det.in : '';
+                    rowData.push(inVal, '', '', 'WH');
+                } else if (isAbsent) {
                     rowData.push('A', '', '', 'A');
                 } else {
                     const totalVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total !== undefined ? det.total : 0);
@@ -195,7 +201,20 @@ const exportExcel = async (req, res) => {
                 }
             });
 
-            rowData.push(s.totalMarks || 0, `${s.percentage || 0}%`, s.failedSubjectsCount || 0, s.remark || (s.isPass ? 'PASS' : 'FAIL'));
+            let pureFailedCount = 0;
+            subjects.forEach(sub => {
+                const det = detailsMap[sub.name] || {};
+                const resUpper = (det.result || '').toUpperCase();
+                const isWH = det.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(resUpper);
+                const markVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
+                if (!isWH && (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'A' || resUpper === 'AB' || markVal < 35)) {
+                    pureFailedCount++;
+                }
+            });
+
+            const overallRemark = (s.isPass && !hasWithHeldStudent) ? 'PASS' : (hasWithHeldStudent ? 'WITHHELD' : 'FAIL');
+            const failCountDisplay = hasWithHeldStudent && pureFailedCount === 0 ? '-' : pureFailedCount;
+            rowData.push(s.totalMarks || 0, `${s.percentage || 0}%`, failCountDisplay, overallRemark);
 
             const addedRow = sheet.addRow(rowData);
             addedRow.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -206,20 +225,23 @@ const exportExcel = async (req, res) => {
                 const det = detailsMap[sub.name] || {};
                 const resUpper = (det.result || '').toUpperCase();
                 const inStr = String(det.in ?? '').trim().toUpperCase();
-                const isAbsent = det.isAbsent || resUpper === 'A' || resUpper === 'AB' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB';
+                const isWithHeld = det.isWithHeld || resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+                const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'A' || resUpper === 'AB' || resUpper === 'ABSENT' || inStr === 'A' || inStr === 'AB');
 
-                if (isAbsent) {
-                    // Cell 1 (IN): 'A' with light yellow fill (#FFF2CC) matching Pic 1
-                    const yellowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
-                    const amberFont = { color: { argb: 'FF92400E' }, bold: true };
-                    addedRow.getCell(currC).fill = yellowFill;
-                    addedRow.getCell(currC).font = amberFont;
-
-                    // Cell 2 (EX): blank ''
-                    // Cell 3 (T): blank ''
-
-                    // Cell 4 (R): 'A' with dark bold font (no pink/red fill)
+                if (isWithHeld) {
+                    // Result cell (R): Sky Blue #7CBCE8 fill with dark/white text (Internals/Total left normal)
+                    addedRow.getCell(currC + 3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7CBCE8' } };
                     addedRow.getCell(currC + 3).font = { color: { argb: 'FF000000' }, bold: true };
+                } else if (isAbsent) {
+                    // Cell 1 (IN): Light Muted Mauve fill with mauve font
+                    const mauveFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F5F8' } };
+                    const mauveFont = { color: { argb: 'FFC58CB5' }, bold: true };
+                    addedRow.getCell(currC).fill = mauveFill;
+                    addedRow.getCell(currC).font = mauveFont;
+
+                    // Cell 4 (R): Muted Mauve #C58CB5 with white bold font
+                    addedRow.getCell(currC + 3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC58CB5' } };
+                    addedRow.getCell(currC + 3).font = { color: { argb: 'FFFFFFFF' }, bold: true };
                 } else {
                     const totalVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
                     const inVal = typeof det.in === 'number' ? det.in : 0;
@@ -260,7 +282,10 @@ const exportExcel = async (req, res) => {
 
             // Overall Remark Highlight
             const remarkCell = addedRow.getCell(totalCol + 3);
-            if (s.remark === 'FAIL' || !s.isPass || (s.failedSubjectsCount && s.failedSubjectsCount > 0)) {
+            if (hasWithHeldStudent) {
+                remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7CBCE8' } }; // #7CBCE8 Sky Blue
+                remarkCell.font = { color: { argb: 'FF000000' }, bold: true };
+            } else if (s.remark === 'FAIL' || !s.isPass || (pureFailedCount > 0)) {
                 remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 remarkCell.font = { color: { argb: 'FF991B1B' }, bold: true };
             } else {
@@ -269,9 +294,11 @@ const exportExcel = async (req, res) => {
 
             // No of Subjects Failed Highlight
             const failCountCell = addedRow.getCell(totalCol + 2);
-            if (s.failedSubjectsCount && s.failedSubjectsCount > 0) {
+            if (pureFailedCount > 0) {
                 failCountCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 failCountCell.font = { color: { argb: 'FF991B1B' }, bold: true };
+            } else if (hasWithHeldStudent) {
+                failCountCell.font = { color: { argb: 'FF7CBCE8' }, bold: true };
             }
         });
 

@@ -332,35 +332,45 @@ function parseMatrix(matrix) {
                              rawTotal.toUpperCase() === 'A' || rawTotal.toUpperCase() === 'AB' ||
                              rawRes === 'A' || rawRes === 'AB' || rawRes === 'ABSENT' || rawRes === 'ABS';
 
+            const isWithHeld = rawRes === 'W' || rawRes === 'WH' || rawRes === 'WITH HELD' || rawRes === 'WITHHELD' ||
+                               rawTotal === 'W' || rawTotal === 'WH' || rawTotal === 'WITH HELD' || rawTotal === 'WITHHELD' ||
+                               rawEx === 'W' || rawEx === 'WH' || rawEx === 'WITH HELD' || rawEx === 'WITHHELD';
+
             let inVal = parseInt(rawIn, 10);
-            if (isNaN(inVal)) inVal = isAbsent ? 'A' : 0;
+            if (isNaN(inVal)) inVal = isAbsent ? 'A' : (isWithHeld ? '' : 0);
 
             let exVal = parseInt(rawEx, 10);
-            if (isNaN(exVal)) exVal = isAbsent ? '' : 0;
+            if (isNaN(exVal)) exVal = isAbsent || isWithHeld ? '' : 0;
 
             let totalVal = parseInt(rawTotal, 10);
             if (isNaN(totalVal)) {
-                totalVal = isAbsent ? 0 : (typeof inVal === 'number' && typeof exVal === 'number' ? inVal + exVal : 0);
+                if (isAbsent || isWithHeld) totalVal = '';
+                else totalVal = (typeof inVal === 'number' && typeof exVal === 'number' ? inVal + exVal : 0);
+            } else if (isWithHeld) {
+                totalVal = '';
             }
 
             let resultVal = rawRes;
             if (isAbsent) {
                 resultVal = 'A';
+            } else if (isWithHeld) {
+                resultVal = 'WH';
             } else if (!resultVal) {
-                resultVal = totalVal >= 35 ? 'P' : 'F';
+                resultVal = typeof totalVal === 'number' && totalVal >= 35 ? 'P' : 'F';
             } else if (resultVal === 'PASS') {
                 resultVal = 'P';
             } else if (resultVal === 'FAIL') {
                 resultVal = 'F';
             }
 
-            marks[sub.code] = isAbsent ? 0 : totalVal;
+            marks[sub.code] = isAbsent || isWithHeld ? 0 : (typeof totalVal === 'number' ? totalVal : 0);
             subjectDetails[sub.code] = {
-                in: isAbsent ? 'A' : inVal,
-                ex: isAbsent ? '' : exVal,
-                total: isAbsent ? '' : totalVal,
-                result: isAbsent ? 'A' : resultVal,
-                isAbsent: isAbsent
+                in: isAbsent ? 'A' : (typeof inVal === 'number' ? inVal : (isWithHeld ? '' : 0)),
+                ex: isAbsent || isWithHeld ? '' : exVal,
+                total: isAbsent || isWithHeld ? '' : totalVal,
+                result: isAbsent ? 'A' : (isWithHeld ? 'WH' : resultVal),
+                isAbsent: isAbsent,
+                isWithHeld: isWithHeld
             };
         });
 
@@ -410,6 +420,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
     const studentDocs = rawStudents.map(student => {
         let studentTotal = 0;
         let failedSubjectsCount = 0;
+        let hasWithHeld = false;
         const detailsMap = student.subjectDetails || {};
 
         subjectNames.forEach(sub => {
@@ -423,11 +434,21 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
 
             const mark = Number(detail.total) || 0;
             const res = (detail.result || '').toUpperCase();
+            const inStr = String(detail.in ?? '').trim().toUpperCase();
+            const isAbsent = detail.isAbsent || res === 'AB' || res === 'A' || res === 'ABSENT' || inStr === 'A' || inStr === 'AB';
+            const isWithHeld = detail.isWithHeld || res === 'W' || res === 'WH' || res === 'WITH HELD' || res === 'WITHHELD';
+
             studentTotal += mark;
 
-            if (res === 'AB' || res === 'A' || detail.isAbsent) {
+            if (isAbsent) {
                 stat.abCount++;
                 failedSubjectsCount++;
+            } else if (isWithHeld) {
+                stat.withHeldCount++;
+                stat.appearedCount++;
+                stat.failCount++;
+                failedSubjectsCount++;
+                hasWithHeld = true;
             } else {
                 stat.appearedCount++;
                 if (mark > stat.highestMarks) stat.highestMarks = mark;
@@ -450,7 +471,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
 
         // Overall passing criteria: 0 failed subjects AND percentage >= 40%
         const isPass = failedSubjectsCount === 0 && percentage >= 40.0;
-        const remark = isPass ? 'PASS' : 'FAIL';
+        const remark = isPass ? 'PASS' : (hasWithHeld ? 'WITHHELD' : 'FAIL');
 
         if (isPass) {
             overallTotalPass++;

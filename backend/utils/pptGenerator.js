@@ -468,7 +468,7 @@ function formatSlide1CollegeTitle(rawName) {
         showLegend: true,
         legendPos: 't',
         legendFontSize: 7.5,
-        chartColors: ['3B82F6', 'B91C1C', '65A30D', '7C3AED', '06B6D4', 'EA580C', '93C5FD', 'F43F5E', '84CC16'],
+        chartColors: ['2563EB', 'DC2626', '16A34A', '10B981', 'C58CB5', '7CBCE8', 'B8860B', 'F43F5E', '84CC16'],
         showValue: true,
         dataLabelFontSize: 6.5,
         dataLabelColor: '000000',

@@ -193,10 +193,10 @@ async function generateResultPDF(result, students, res) {
                 { label: 'FCD', backgroundColor: '#2563EB', data: subjects.map(s => s.fcdCount || 0) },
                 { label: 'FC', backgroundColor: '#DC2626', data: subjects.map(s => s.fcCount || 0) },
                 { label: 'SC', backgroundColor: '#16A34A', data: subjects.map(s => s.scCount || 0) },
-                { label: 'Pass', backgroundColor: '#8B5CF6', data: subjects.map(s => s.passClassCount || 0) },
-                { label: 'AB', backgroundColor: '#06B6D4', data: subjects.map(s => s.abCount || 0) },
-                { label: 'With Held', backgroundColor: '#F97316', data: subjects.map(s => s.withHeldCount || 0) },
-                { label: 'Fail', backgroundColor: '#93C5FD', data: subjects.map(s => s.failCount || 0) },
+                { label: 'Pass', backgroundColor: '#10B981', data: subjects.map(s => s.passClassCount || 0) },
+                { label: 'AB', backgroundColor: '#C58CB5', data: subjects.map(s => s.abCount || 0) },
+                { label: 'With Held', backgroundColor: '#7CBCE8', data: subjects.map(s => s.withHeldCount || 0) },
+                { label: 'Fail', backgroundColor: '#B8860B', data: subjects.map(s => s.failCount || 0) },
                 { label: 'Total Pass', backgroundColor: '#F43F5E', data: subjects.map(s => s.totalPassCount || 0) },
                 { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat((s.passPercentage || 0).toFixed(2))) }
             ]
@@ -458,10 +458,10 @@ async function generateResultPDF(result, students, res) {
         doc.fillColor('#334155').fontSize(7).font('Helvetica').text(`${sStat.passClassCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[5].width - 4, align: 'center' });
         rx += p4Cols[5].width;
 
-        doc.fillColor('#06B6D4').fontSize(7).font('Helvetica-Bold').text(`${sStat.abCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[6].width - 4, align: 'center' });
+        doc.fillColor('#C58CB5').fontSize(7).font('Helvetica-Bold').text(`${sStat.abCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[6].width - 4, align: 'center' });
         rx += p4Cols[6].width;
 
-        doc.fillColor('#F97316').fontSize(7).font('Helvetica-Bold').text(`${sStat.withHeldCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[7].width - 4, align: 'center' });
+        doc.fillColor('#0284C7').fontSize(7).font('Helvetica-Bold').text(`${sStat.withHeldCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[7].width - 4, align: 'center' });
         rx += p4Cols[7].width;
 
         doc.fillColor('#B91C1C').fontSize(7).font('Helvetica-Bold').text(`${sStat.failCount || 0}`, rx + 2, currentY + 5, { width: p4Cols[8].width - 4, align: 'center' });
@@ -520,42 +520,45 @@ async function generateResultPDF(result, students, res) {
         mx += subColW;
     });
 
-    doc.fillColor('#93C5FD').fontSize(7.5).font('Helvetica-Bold').text('Overall Batch', mx + 4, currentY + 5, { width: rightBoxW - 8, align: 'center' });
+    doc.fillColor('#FFFFFF').fontSize(7.5).font('Helvetica-Bold').text('Total Overall', mx + 4, currentY + 5, { width: rightBoxW - 8, align: 'center' });
     currentY += 18;
 
     p2Metrics.forEach((m, idx) => {
-        checkPageBreak(18, 'Subject Statistics Matrix (Continued)');
-
+        checkPageBreak(18, 'Subject Statistics Summary Matrix (Continued)');
         const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
         doc.rect(margin, currentY, contentWidth, 18).fill(rowBg);
         doc.rect(margin, currentY, contentWidth, 18).stroke('#E2E8F0');
 
-        doc.fillColor('#0F172A').fontSize(7).font('Helvetica-Bold').text(m.label, margin + 4, currentY + 5, { width: metricLabelColW - 8 });
+        doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(m.label, margin + 4, currentY + 5, { width: metricLabelColW - 8 });
 
         let cx = margin + metricLabelColW;
         subjects.forEach(sub => {
             const sStat = computedSubStatsMap[sub.name] || sub;
-            let displayVal = '';
-            if (m.key === 'staffName' || m.key === 'staffSig') displayVal = '';
-            else if (m.key === 'passPercentage') displayVal = `${(sStat.passPercentage || 0).toFixed(1)}`;
-            else displayVal = `${sStat[m.key] !== undefined ? sStat[m.key] : (sub[m.key] || 0)}`;
+            let val = sStat[m.key];
+            let displayVal = `${val ?? 0}`;
+            if (m.key === 'passPercentage') {
+                displayVal = `${(parseFloat(val) || 0).toFixed(2)}%`;
+            }
 
-            doc.fillColor('#334155').fontSize(7).font('Helvetica').text(displayVal, cx, currentY + 5, { width: subColW, align: 'center' });
+            let cellColor = '#334155';
+            if (m.key === 'passPercentage') cellColor = '#2563EB';
+            else if (m.key === 'failCount') cellColor = '#DC2626';
+            else if (m.key === 'abCount') cellColor = '#C58CB5';
+            else if (m.key === 'withHeldCount') cellColor = '#0284C7';
+
+            doc.fillColor(cellColor).fontSize(7).font(m.key === 'passPercentage' ? 'Helvetica-Bold' : 'Helvetica').text(displayVal, cx, currentY + 5, { width: subColW, align: 'center' });
             cx += subColW;
         });
 
-        // Right side overall box item
-        if (overallRightBox[idx]) {
-            const ob = overallRightBox[idx];
-            doc.fillColor('#1E40AF').fontSize(7).font('Helvetica-Bold').text(`${ob.label}: ${ob.val}`, cx + 4, currentY + 5, { width: rightBoxW - 8, align: 'center' });
+        const rItem = overallRightBox[idx];
+        if (rItem) {
+            doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text(`${rItem.label}: ${rItem.val}`, cx + 4, currentY + 5, { width: rightBoxW - 8, align: 'center' });
         }
 
         currentY += 18;
     });
 
     currentY += 25;
-
-
 
     // =========================================================
     // SUBJECT-WISE 10 TOPPERS & ALL FAILED STUDENTS SECTION
@@ -574,12 +577,14 @@ async function generateResultPDF(result, students, res) {
         const subStudents = (students || []).map(st => {
             const markVal = Number(st.marks?.[sub.name]) || 0;
             const det = st.subjectDetails?.[sub.name] || {};
-            const inVal = det.in !== undefined ? det.in : 0;
-            const exVal = det.ex !== undefined ? det.ex : 0;
+            const inVal = det.in !== undefined ? det.in : '';
+            const exVal = det.ex !== undefined ? det.ex : '';
             const resUpper = (det.result || '').toUpperCase();
+            const isWithHeld = det.isWithHeld || resUpper === 'WH' || resUpper === 'W' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+            const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A');
             
             let isSubPass = true;
-            if (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || markVal < 35) {
+            if (isWithHeld || isAbsent || resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
                 isSubPass = false;
             }
 
@@ -590,7 +595,9 @@ async function generateResultPDF(result, students, res) {
                 ex: exVal,
                 mark: markVal,
                 isPass: isSubPass,
-                result: resUpper
+                isWithHeld,
+                isAbsent,
+                result: isWithHeld ? 'WH' : (isAbsent ? 'AB' : resUpper)
             };
         });
 
@@ -688,31 +695,38 @@ async function generateResultPDF(result, students, res) {
 
             subFailed.forEach((f, idx) => {
                 checkPageBreak(16, `Subject: ${getShortCode(sub.name)} Failed List`);
-                const rowBg = idx % 2 === 0 ? '#FEF2F2' : '#FFFFFF';
+                const isWithHeld = f.result === 'WH' || f.result === 'W' || f.result === 'WITH HELD' || f.result === 'WITHHELD' || f.isWithHeld;
+                const isAbsent = !isWithHeld && (f.result === 'AB' || f.result === 'ABSENT' || f.result === 'A');
+
+                const rowBg = isWithHeld ? '#F0F9FF' : (isAbsent ? '#FAF5F8' : (idx % 2 === 0 ? '#FEF2F2' : '#FFFFFF'));
+                const strokeBg = isWithHeld ? '#BAE6FD' : (isAbsent ? '#E9D5E2' : '#FECACA');
+                const statusColor = isWithHeld ? '#0284C7' : (isAbsent ? '#C58CB5' : '#B91C1C');
+                const statusText = isWithHeld ? 'WITHHELD' : (isAbsent ? 'ABSENT' : 'FAIL');
+
                 doc.rect(margin, currentY, contentWidth, 16).fill(rowBg);
-                doc.rect(margin, currentY, contentWidth, 16).stroke('#FECACA');
+                doc.rect(margin, currentY, contentWidth, 16).stroke(strokeBg);
 
                 let rx = margin;
-                doc.fillColor('#B91C1C').fontSize(7.5).font('Helvetica-Bold').text(`${idx + 1}`, rx + 4, currentY + 4, { width: subFailCols[0].width - 8, align: 'center' });
+                doc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold').text(`${idx + 1}`, rx + 4, currentY + 4, { width: subFailCols[0].width - 8, align: 'center' });
                 rx += subFailCols[0].width;
 
-                doc.fillColor('#991B1B').fontSize(7.5).font('Helvetica-Bold').text(f.usn || '-', rx + 4, currentY + 4, { width: subFailCols[1].width - 8 });
+                doc.fillColor(isWithHeld ? '#0369A1' : (isAbsent ? '#862D6E' : '#991B1B')).fontSize(7.5).font('Helvetica-Bold').text(f.usn || '-', rx + 4, currentY + 4, { width: subFailCols[1].width - 8 });
                 rx += subFailCols[1].width;
 
                 doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((f.name || '-').substring(0, 28), rx + 4, currentY + 4, { width: subFailCols[2].width - 8 });
                 rx += subFailCols[2].width;
 
-                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.in}`, rx + 4, currentY + 4, { width: subFailCols[3].width - 8, align: 'center' });
+                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.in !== undefined && f.in !== '' ? f.in : '-'}`, rx + 4, currentY + 4, { width: subFailCols[3].width - 8, align: 'center' });
                 rx += subFailCols[3].width;
 
-                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.ex}`, rx + 4, currentY + 4, { width: subFailCols[4].width - 8, align: 'center' });
+                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.ex !== undefined && f.ex !== '' ? f.ex : '-'}`, rx + 4, currentY + 4, { width: subFailCols[4].width - 8, align: 'center' });
                 rx += subFailCols[4].width;
 
-                doc.fillColor('#B91C1C').fontSize(8).font('Helvetica-Bold').text(`${f.mark}/100`, rx + 4, currentY + 4, { width: subFailCols[5].width - 8, align: 'center' });
+                const markDisplay = isWithHeld ? 'WH' : (isAbsent ? 'AB' : `${f.mark}/100`);
+                doc.fillColor(statusColor).fontSize(8).font('Helvetica-Bold').text(markDisplay, rx + 4, currentY + 4, { width: subFailCols[5].width - 8, align: 'center' });
                 rx += subFailCols[5].width;
 
-                const statusText = (f.result === 'AB' || f.result === 'ABSENT') ? 'ABSENT' : 'FAIL';
-                doc.fillColor('#B91C1C').fontSize(7.5).font('Helvetica-Bold').text(statusText, rx + 4, currentY + 4, { width: subFailCols[6].width - 8, align: 'center' });
+                doc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold').text(statusText, rx + 4, currentY + 4, { width: subFailCols[6].width - 8, align: 'center' });
 
                 currentY += 16;
             });

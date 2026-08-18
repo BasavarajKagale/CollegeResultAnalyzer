@@ -276,15 +276,18 @@ const ResultDetails = () => {
                         </thead>
                         <tbody>
                             {[...students].sort((a: any, b: any) => (a.usn || '').localeCompare(b.usn || '', undefined, { numeric: true, sensitivity: 'base' })).map((s: any, idx: number) => {
-                                const failedCount = s.failedSubjectsCount !== undefined ? s.failedSubjectsCount : (
-                                    result.subjects.filter((sub: any) => {
-                                        const m = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
-                                        const d = s.subjectDetails?.[sub.name] || {};
-                                        const r = (d.result || '').toUpperCase();
-                                        return r === 'AB' || r === 'A' || r === 'F' || r === 'FAIL' || m < 35;
-                                    }).length
-                                );
-                                const isFailedOverall = !s.isPass || s.remark === 'FAIL';
+                                const isWithHeldStudent = s.remark === 'WITHHELD' || (s.subjectDetails && Object.values(s.subjectDetails).some((d: any) => d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(String(d?.result || '').toUpperCase())));
+                                
+                                const pureFailedCount = result.subjects.filter((sub: any) => {
+                                    const m = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
+                                    const d = s.subjectDetails?.[sub.name] || {};
+                                    const r = (d.result || '').toUpperCase();
+                                    const isWH = d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(r);
+                                    return !isWH && (r === 'AB' || r === 'A' || r === 'F' || r === 'FAIL' || m < 35);
+                                }).length;
+
+                                const isPassStudent = s.isPass && !isWithHeldStudent;
+
                                 return (
                                     <tr key={s._id || `${s.usn}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                         <td style={{ textAlign: 'center', padding: '0.6rem 0.4rem', fontWeight: 600, color: 'var(--primary)' }}>
@@ -296,16 +299,20 @@ const ResultDetails = () => {
                                             const markVal = s.marks[sub.name] !== undefined ? s.marks[sub.name] : 0;
                                             const det = s.subjectDetails?.[sub.name] || {};
                                             const resUpper = (det.result || '').toUpperCase();
+                                            const inStr = String(det.in ?? '').trim().toUpperCase();
                                             const inVal = typeof det.in === 'number' ? det.in : (Number(det.in) || 0);
                                             const exVal = typeof det.ex === 'number' ? det.ex : (Number(det.ex) || 0);
 
+                                            const isWithHeld = det.isWithHeld || resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
+                                            const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || inStr === 'A' || inStr === 'AB');
+                                            
                                             let isSubFail = false;
-                                            let isAbsent = false;
                                             let reasonTag = '';
 
-                                            if (resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || det.isAbsent) {
+                                            if (isWithHeld) {
+                                                isSubFail = false;
+                                            } else if (isAbsent) {
                                                 isSubFail = true;
-                                                isAbsent = true;
                                                 reasonTag = '(AB)';
                                             } else if (resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
                                                 isSubFail = true;
@@ -323,18 +330,34 @@ const ResultDetails = () => {
                                                 }
                                             }
 
-                                            const displayText = isAbsent ? `${markVal}(AB)` : (isSubFail ? `${markVal}${reasonTag}` : `${markVal}`);
+                                            let displayText = `${markVal}`;
+                                            let cellBg = 'transparent';
+                                            let cellColor = '#fff';
+
+                                            if (isWithHeld) {
+                                                displayText = 'WH';
+                                                cellBg = 'rgba(124, 188, 232, 0.22)'; // #7CBCE8 Sky Blue
+                                                cellColor = '#7CBCE8';
+                                            } else if (isAbsent) {
+                                                displayText = 'AB';
+                                                cellBg = 'rgba(197, 140, 181, 0.22)'; // #C58CB5 Muted Mauve
+                                                cellColor = '#C58CB5';
+                                            } else if (isSubFail) {
+                                                displayText = `${markVal}${reasonTag}`;
+                                                cellBg = 'rgba(220, 53, 69, 0.25)';
+                                                cellColor = '#ff6b6b';
+                                            }
 
                                             return (
                                                 <td 
                                                     key={sub.name} 
-                                                    title={isAbsent ? `Absent (${markVal} marks)` : (isSubFail ? `Failed: ${markVal} marks ${reasonTag}` : `Passed ${sub.name}: ${markVal}`)}
+                                                    title={isWithHeld ? 'Result Withheld by University' : (isAbsent ? 'Candidate Absent' : (isSubFail ? `Failed: ${markVal} marks ${reasonTag}` : `Passed ${sub.name}: ${markVal}`))}
                                                     style={{ 
                                                         textAlign: 'center', 
                                                         padding: '0.6rem 0.4rem',
-                                                        backgroundColor: isAbsent ? '#FFF2CC' : (isSubFail ? 'rgba(220, 53, 69, 0.25)' : 'transparent'),
-                                                        color: isAbsent ? '#854D0E' : (isSubFail ? '#ff6b6b' : '#fff'),
-                                                        fontWeight: (isSubFail || isAbsent) ? 700 : 400
+                                                        backgroundColor: cellBg,
+                                                        color: cellColor,
+                                                        fontWeight: (isSubFail || isAbsent || isWithHeld) ? 700 : 400
                                                     }}
                                                 >
                                                     {displayText}
@@ -345,18 +368,41 @@ const ResultDetails = () => {
                                             {s.totalMarks}/{(result.subjects?.length || 1) * 100}
                                         </td>
                                         <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
-                                        <td style={{ textAlign: 'center', fontWeight: 700, padding: '0.6rem 0.5rem', color: failedCount > 0 ? '#ff6b6b' : '#28a745' }}>
-                                            {failedCount}
-                                        </td>
                                         <td style={{ 
                                             textAlign: 'center', 
-                                            padding: '0.6rem 0.5rem',
-                                            backgroundColor: isFailedOverall ? 'rgba(220, 53, 69, 0.25)' : 'rgba(40, 167, 69, 0.15)',
-                                            color: isFailedOverall ? '#ff6b6b' : '#28a745',
-                                            fontWeight: 700
+                                            fontWeight: 700, 
+                                            padding: '0.6rem 0.5rem', 
+                                            color: isWithHeldStudent && pureFailedCount === 0 ? '#7CBCE8' : (pureFailedCount > 0 ? '#ff6b6b' : '#28a745') 
                                         }}>
-                                            {s.remark || (s.isPass ? 'PASS' : 'FAIL')}
+                                            {isWithHeldStudent && pureFailedCount === 0 ? '-' : pureFailedCount}
                                         </td>
+                                        {(() => {
+                                            let badgeBg = 'rgba(220, 53, 69, 0.25)';
+                                            let badgeColor = '#ff6b6b';
+                                            let badgeText = 'FAIL';
+
+                                            if (isWithHeldStudent) {
+                                                badgeBg = 'rgba(124, 188, 232, 0.25)'; // #7CBCE8 Sky Blue
+                                                badgeColor = '#7CBCE8';
+                                                badgeText = 'WITHHELD';
+                                            } else if (isPassStudent) {
+                                                badgeBg = 'rgba(40, 167, 69, 0.15)';
+                                                badgeColor = '#28a745';
+                                                badgeText = 'PASS';
+                                            }
+
+                                            return (
+                                                <td style={{ 
+                                                    textAlign: 'center', 
+                                                    padding: '0.6rem 0.5rem',
+                                                    backgroundColor: badgeBg,
+                                                    color: badgeColor,
+                                                    fontWeight: 700
+                                                }}>
+                                                    {badgeText}
+                                                </td>
+                                            );
+                                        })()}
                                     </tr>
                                 );
                             })}
