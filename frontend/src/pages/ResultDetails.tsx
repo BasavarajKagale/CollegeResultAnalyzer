@@ -385,10 +385,14 @@ const ResultDetails = () => {
                                                 badgeBg = 'rgba(124, 188, 232, 0.25)'; // #7CBCE8 Sky Blue
                                                 badgeColor = '#7CBCE8';
                                                 badgeText = 'WITHHELD';
-                                            } else if (isPassStudent) {
+                                            } else if (isPassStudent && pureFailedCount === 0) {
                                                 badgeBg = 'rgba(40, 167, 69, 0.15)';
                                                 badgeColor = '#28a745';
-                                                badgeText = 'PASS';
+                                                const pct = s.percentage || 0;
+                                                if (pct >= 70) badgeText = 'FCD';
+                                                else if (pct >= 60) badgeText = 'FC';
+                                                else if (pct >= 50) badgeText = 'SC';
+                                                else badgeText = 'PASS';
                                             }
 
                                             return (

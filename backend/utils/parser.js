@@ -469,9 +469,17 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
         const maxTotal = subjectNames.length * 100;
         const percentage = maxTotal > 0 ? parseFloat(((studentTotal / maxTotal) * 100).toFixed(2)) : 0;
 
-        // Overall passing criteria: 0 failed subjects AND percentage >= 40%
-        const isPass = failedSubjectsCount === 0 && percentage >= 40.0;
-        const remark = isPass ? 'PASS' : (hasWithHeld ? 'WITHHELD' : 'FAIL');
+        // Overall passing criteria: 0 failed subjects AND percentage >= 35% (Fail is >= 1 failed subject or < 35%)
+        const isPass = failedSubjectsCount === 0 && percentage >= 35.0;
+        let remark = 'FAIL';
+        if (hasWithHeld) {
+            remark = 'WITHHELD';
+        } else if (isPass) {
+            if (percentage >= 70.0) remark = 'FCD';
+            else if (percentage >= 60.0) remark = 'FC';
+            else if (percentage >= 50.0) remark = 'SC';
+            else remark = 'PASS';
+        }
 
         if (isPass) {
             overallTotalPass++;

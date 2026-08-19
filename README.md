@@ -78,8 +78,8 @@ The platform enforces standardized academic evaluation criteria:
 - **First Class with Distinction (FCD):** $\ge 70.0\%$
 - **First Class (FC):** $60.0\% - 69.99\%$
 - **Second Class (SC):** $50.0\% - 59.99\%$
-- **Pass Class:** $40.0\% - 49.99\%$
-- **Fail:** Failed in $\ge 1$ subject or overall percentage $< 40\%$
+- **Pass Class:** $35.0\% - 49.99\%$
+- **Fail:** Failed in $\ge 1$ subject or overall percentage $< 35\%$
 
 ---
 

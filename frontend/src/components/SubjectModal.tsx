@@ -214,7 +214,7 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                                                 background: s.isWithHeld ? 'rgba(124, 188, 232, 0.22)' : (s.isAbsent ? 'rgba(197, 140, 181, 0.22)' : (s.isPass ? 'rgba(40, 167, 69, 0.15)' : 'rgba(220, 53, 69, 0.15)')),
                                                 color: s.isWithHeld ? '#7CBCE8' : (s.isAbsent ? '#C58CB5' : (s.isPass ? '#28a745' : '#dc3545'))
                                             }}>
-                                                {s.isWithHeld ? 'WITHHELD' : (s.isPass ? 'PASS' : (s.isAbsent ? 'ABSENT' : 'FAIL'))}
+                                                {s.isWithHeld ? 'WITHHELD' : (s.isPass ? (s.mark >= 70 ? 'FCD' : (s.mark >= 60 ? 'FC' : (s.mark >= 50 ? 'SC' : 'PASS'))) : (s.isAbsent ? 'ABSENT' : 'FAIL'))}
                                             </span>
                                         </td>
                                     </tr>

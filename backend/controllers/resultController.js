@@ -212,7 +212,17 @@ const exportExcel = async (req, res) => {
                 }
             });
 
-            const overallRemark = (s.isPass && !hasWithHeldStudent) ? 'PASS' : (hasWithHeldStudent ? 'WITHHELD' : 'FAIL');
+            let overallRemark = 'FAIL';
+            if (hasWithHeldStudent) {
+                overallRemark = 'WITHHELD';
+            } else if (s.isPass && pureFailedCount === 0) {
+                const pct = s.percentage || 0;
+                if (pct >= 70) overallRemark = 'FCD';
+                else if (pct >= 60) overallRemark = 'FC';
+                else if (pct >= 50) overallRemark = 'SC';
+                else overallRemark = 'PASS';
+            }
+
             const failCountDisplay = hasWithHeldStudent && pureFailedCount === 0 ? '-' : pureFailedCount;
             rowData.push(s.totalMarks || 0, `${s.percentage || 0}%`, failCountDisplay, overallRemark);
 
@@ -285,7 +295,7 @@ const exportExcel = async (req, res) => {
             if (hasWithHeldStudent) {
                 remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7CBCE8' } }; // #7CBCE8 Sky Blue
                 remarkCell.font = { color: { argb: 'FF000000' }, bold: true };
-            } else if (s.remark === 'FAIL' || !s.isPass || (pureFailedCount > 0)) {
+            } else if (overallRemark === 'FAIL' || !s.isPass || (pureFailedCount > 0)) {
                 remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                 remarkCell.font = { color: { argb: 'FF991B1B' }, bold: true };
             } else {
