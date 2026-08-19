@@ -13,28 +13,73 @@ function getShortCode(subjectName) {
 }
 
 /**
- * Fetch PNG chart image buffer from QuickChart API
+ * Fetch PNG chart image buffer from QuickChart API using HTTP POST with retry and 15s timeout
  */
-function fetchChartImage(chartConfig, width = 600, height = 340) {
+function fetchChartImage(chartConfig, width = 600, height = 340, retries = 2) {
     return new Promise((resolve) => {
-        try {
-            const url = `https://quickchart.io/chart?w=${width}&h=${height}&bkg=white&f=png&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
-            const req = https.get(url, (res) => {
-                if (res.statusCode !== 200) return resolve(null);
-                const chunks = [];
-                res.on('data', (chunk) => chunks.push(chunk));
-                res.on('end', () => resolve(Buffer.concat(chunks)));
-            });
-            req.on('error', () => resolve(null));
-            req.setTimeout(4000, () => {
-                req.destroy();
+        const attempt = (remainingRetries) => {
+            try {
+                const data = JSON.stringify({
+                    chart: chartConfig,
+                    width: width,
+                    height: height,
+                    backgroundColor: 'white',
+                    format: 'png'
+                });
+
+                const options = {
+                    hostname: 'quickchart.io',
+                    port: 443,
+                    path: '/chart',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(data)
+                    },
+                    timeout: 15000 // 15s timeout for complex multi-bar charts
+                };
+
+                const req = https.request(options, (res) => {
+                    if (res.statusCode !== 200) {
+                        if (remainingRetries > 0) {
+                            return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                        }
+                        return resolve(null);
+                    }
+                    const chunks = [];
+                    res.on('data', (chunk) => chunks.push(chunk));
+                    res.on('end', () => resolve(Buffer.concat(chunks)));
+                });
+
+                req.on('error', () => {
+                    if (remainingRetries > 0) {
+                        return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                    }
+                    resolve(null);
+                });
+
+                req.on('timeout', () => {
+                    req.destroy();
+                    if (remainingRetries > 0) {
+                        return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                    }
+                    resolve(null);
+                });
+
+                req.write(data);
+                req.end();
+            } catch (err) {
+                if (remainingRetries > 0) {
+                    return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                }
                 resolve(null);
-            });
-        } catch (err) {
-            resolve(null);
-        }
+            }
+        };
+
+        attempt(retries);
     });
 }
+
 
 /**
  * Main Async PDF Generator Handler for College Result Analyzer
@@ -93,11 +138,26 @@ async function generateResultPDF(result, students, res) {
     const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
     const subjects = result.subjects || [];
     const totStudents = stats.totalStudents || students.length || 1;
-    const maxTotalMarks = subjects.length * 100 || 100;
+    const maxTotalMarks = subjects.reduce((acc, sub) => {
+        const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || (students || []).some(st => {
+            const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+            return m > 100;
+        });
+        return acc + (is200 ? 200 : 100);
+    }, 0) || (subjects.length * 100 || 100);
 
     // Compute live accurate subject statistics (excluding absent from appeared)
     const computedSubStatsMap = {};
     subjects.forEach(sub => {
+        const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || (students || []).some(st => {
+            const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+            return m > 100;
+        });
+        const passThreshold = is200 ? 70 : 35;
+        const fcdThreshold = is200 ? 140 : 70;
+        const fcThreshold = is200 ? 120 : 60;
+        const scThreshold = is200 ? 70 : 35;
+
         let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
         students.forEach(st => {
             const det = st.subjectDetails?.[sub.name] || {};
@@ -114,16 +174,16 @@ async function generateResultPDF(result, students, res) {
                 appeared++;
             } else {
                 appeared++;
-                if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                if (mark < passThreshold || resUpper === 'F' || resUpper === 'FAIL') {
                     fail++;
-                } else if (mark >= 70) {
+                } else if (mark >= fcdThreshold) {
                     fcd++;
-                } else if (mark >= 60) {
+                } else if (mark >= fcThreshold) {
                     fc++;
-                } else if (mark > 35) {
+                } else if (mark > scThreshold) {
                     sc++;
-                } else if (mark === 35) {
-                    passClass++; // Strictly 35
+                } else if (mark === passThreshold) {
+                    passClass++; // Strictly pass threshold
                 }
             }
         });
@@ -189,15 +249,15 @@ async function generateResultPDF(result, students, res) {
         data: {
             labels: subjects.map(s => getShortCode(s.name)),
             datasets: [
-                { label: 'FCD', backgroundColor: '#2563EB', data: subjects.map(s => s.fcdCount || 0) },
-                { label: 'FC', backgroundColor: '#DC2626', data: subjects.map(s => s.fcCount || 0) },
-                { label: 'SC', backgroundColor: '#16A34A', data: subjects.map(s => s.scCount || 0) },
-                { label: 'Pass', backgroundColor: '#10B981', data: subjects.map(s => s.passClassCount || 0) },
-                { label: 'AB', backgroundColor: '#C58CB5', data: subjects.map(s => s.abCount || 0) },
-                { label: 'With Held', backgroundColor: '#7CBCE8', data: subjects.map(s => s.withHeldCount || 0) },
-                { label: 'Fail', backgroundColor: '#B8860B', data: subjects.map(s => s.failCount || 0) },
-                { label: 'Total Pass', backgroundColor: '#F43F5E', data: subjects.map(s => s.totalPassCount || 0) },
-                { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat((s.passPercentage || 0).toFixed(2))) }
+                { label: 'FCD', backgroundColor: '#2563EB', data: subjects.map(s => (computedSubStatsMap[s.name] || s).fcdCount || 0) },
+                { label: 'FC', backgroundColor: '#DC2626', data: subjects.map(s => (computedSubStatsMap[s.name] || s).fcCount || 0) },
+                { label: 'SC', backgroundColor: '#16A34A', data: subjects.map(s => (computedSubStatsMap[s.name] || s).scCount || 0) },
+                { label: 'Pass', backgroundColor: '#10B981', data: subjects.map(s => (computedSubStatsMap[s.name] || s).passClassCount || 0) },
+                { label: 'AB', backgroundColor: '#C58CB5', data: subjects.map(s => (computedSubStatsMap[s.name] || s).abCount || 0) },
+                { label: 'With Held', backgroundColor: '#7CBCE8', data: subjects.map(s => (computedSubStatsMap[s.name] || s).withHeldCount || 0) },
+                { label: 'Fail', backgroundColor: '#B8860B', data: subjects.map(s => (computedSubStatsMap[s.name] || s).failCount || 0) },
+                { label: 'Total Pass', backgroundColor: '#F43F5E', data: subjects.map(s => (computedSubStatsMap[s.name] || s).totalPassCount || 0) },
+                { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat(((computedSubStatsMap[s.name] || s).passPercentage || 0).toFixed(2))) }
             ]
         },
         options: {
@@ -342,6 +402,10 @@ async function generateResultPDF(result, students, res) {
     if (pic1ChartBuf) {
         doc.image(pic1ChartBuf, margin, currentY, { width: contentWidth, height: 180 });
         currentY += 185;
+    } else {
+        // High-Quality Native Vector Overall Performance Bar Chart Fallback
+        drawNativeOverallChart(doc, margin, currentY, contentWidth, 180, stats, totStudents);
+        currentY += 190;
     }
 
     // Pic 1 Summary Table Below Chart
@@ -399,6 +463,10 @@ async function generateResultPDF(result, students, res) {
 
     if (pic3ChartBuf) {
         doc.image(pic3ChartBuf, margin, currentY, { width: contentWidth, height: 260 });
+        currentY += 270;
+    } else {
+        // High-Quality Native Vector Subject Performance Multi-Bar Chart Fallback
+        drawNativeSubjectChart(doc, margin, currentY, contentWidth, 260, subjects, computedSubStatsMap);
         currentY += 270;
     }
 
@@ -512,7 +580,7 @@ async function generateResultPDF(result, students, res) {
     // Draw Subject Statistics Matrix Header
     doc.roundedRect(margin, currentY, contentWidth, 18, 4).fill('#1E293B');
     doc.fillColor('#FFFFFF').fontSize(7.5).font('Helvetica-Bold').text('Metric', margin + 4, currentY + 5, { width: metricLabelColW - 8 });
-    
+
     let mx = margin + metricLabelColW;
     subjects.forEach(sub => {
         doc.fillColor('#FFFFFF').fontSize(6.5).font('Helvetica-Bold').text(getShortCode(sub.name), mx, currentY + 5, { width: subColW, align: 'center' });
@@ -582,7 +650,7 @@ async function generateResultPDF(result, students, res) {
             const inStr = String(det.in ?? '').trim().toUpperCase();
             const isWithHeld = det.isWithHeld || resUpper === 'WH' || resUpper === 'W' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
             const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || inStr === 'A' || inStr === 'AB');
-            
+
             let isSubPass = false;
             if (!isWithHeld && !isAbsent && resUpper !== 'F' && resUpper !== 'FAIL' && markVal >= 35) {
                 isSubPass = true;
@@ -841,6 +909,168 @@ async function generateResultPDF(result, students, res) {
     doc.end();
 }
 
+/**
+ * High-quality Native Vector Overall Performance Bar Chart (Fallback)
+ */
+function drawNativeOverallChart(doc, x, y, width, height, stats, totStudents) {
+    const chartW = width;
+    const chartH = height;
+    const padL = 35;
+    const padR = 15;
+    const padT = 25;
+    const padB = 25;
+    const plotW = chartW - padL - padR;
+    const plotH = chartH - padT - padB;
+
+    // Background & border
+    doc.roundedRect(x, y, chartW, chartH, 6).fillAndStroke('#FFFFFF', '#E2E8F0');
+
+    // Title
+    doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text('Overall Class Performance Bar Chart', x, y + 8, { width: chartW, align: 'center' });
+
+    // Legend
+    const legX = x + chartW - 160;
+    doc.rect(legX, y + 8, 8, 8).fill('#3B82F6');
+    doc.fillColor('#334155').fontSize(7).font('Helvetica').text('Count', legX + 12, y + 8);
+    doc.rect(legX + 60, y + 8, 8, 8).fill('#B91C1C');
+    doc.fillColor('#334155').fontSize(7).font('Helvetica').text('Percentage (%)', legX + 72, y + 8);
+
+    const categories = [
+        { label: 'Appeared', count: stats.totalStudents || 0, pct: 100 },
+        { label: 'FCD', count: stats.fcdCount || 0, pct: parseFloat(((stats.fcdCount || 0) / totStudents * 100).toFixed(1)) },
+        { label: 'FC', count: stats.fcCount || 0, pct: parseFloat(((stats.fcCount || 0) / totStudents * 100).toFixed(1)) },
+        { label: 'SC', count: stats.scCount || 0, pct: parseFloat(((stats.scCount || 0) / totStudents * 100).toFixed(1)) },
+        { label: 'Total Fail', count: stats.failCount || 0, pct: parseFloat(((stats.failCount || 0) / totStudents * 100).toFixed(1)) },
+        { label: 'Total Pass', count: stats.passCount || 0, pct: parseFloat((stats.passPercentage || 0).toFixed(1)) }
+    ];
+
+    const maxVal = Math.max(...categories.map(c => c.count), 100);
+    const numTicks = 4;
+
+    // Y Axis Grid lines
+    for (let t = 0; t <= numTicks; t++) {
+        const val = Math.round((maxVal / numTicks) * t);
+        const gy = y + padT + plotH - (val / maxVal) * plotH;
+        doc.moveTo(x + padL, gy).lineTo(x + padL + plotW, gy).stroke('#F1F5F9');
+        doc.fillColor('#94A3B8').fontSize(6).font('Helvetica').text(`${val}`, x + 5, gy - 3, { width: padL - 10, align: 'right' });
+    }
+
+    const groupW = plotW / categories.length;
+    const barW = Math.min(16, (groupW - 12) / 2);
+
+    categories.forEach((cat, idx) => {
+        const gx = x + padL + idx * groupW + groupW / 2;
+        const b1H = maxVal > 0 ? (cat.count / maxVal) * plotH : 0;
+        const b2H = maxVal > 0 ? (cat.pct / maxVal) * plotH : 0;
+
+        // Bar 1: Count
+        const b1X = gx - barW - 2;
+        const b1Y = y + padT + plotH - b1H;
+        if (b1H > 0) {
+            doc.rect(b1X, b1Y, barW, b1H).fill('#3B82F6');
+            doc.fillColor('#1E40AF').fontSize(6).font('Helvetica-Bold').text(`${cat.count}`, b1X - 4, Math.max(y + padT, b1Y - 8), { width: barW + 8, align: 'center' });
+        }
+
+        // Bar 2: Percentage
+        const b2X = gx + 2;
+        const b2Y = y + padT + plotH - b2H;
+        if (b2H > 0 && cat.label !== 'Appeared') {
+            doc.rect(b2X, b2Y, barW, b2H).fill('#B91C1C');
+            doc.fillColor('#991B1B').fontSize(5.5).font('Helvetica-Bold').text(`${cat.pct}%`, b2X - 4, Math.max(y + padT, b2Y - 8), { width: barW + 8, align: 'center' });
+        }
+
+        // X Label
+        doc.fillColor('#475569').fontSize(6.5).font('Helvetica-Bold').text(cat.label, gx - groupW / 2 + 2, y + padT + plotH + 5, { width: groupW - 4, align: 'center' });
+    });
+}
+
+/**
+ * High-quality Native Vector Subject-Wise Multi-Bar Chart (Fallback)
+ */
+function drawNativeSubjectChart(doc, x, y, width, height, subjects, computedSubStatsMap) {
+    const chartW = width;
+    const chartH = height;
+    const padL = 30;
+    const padR = 10;
+    const padT = 35;
+    const padB = 30;
+    const plotW = chartW - padL - padR;
+    const plotH = chartH - padT - padB;
+
+    doc.roundedRect(x, y, chartW, chartH, 6).fillAndStroke('#FFFFFF', '#E2E8F0');
+
+    // Title
+    doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text('Subject-Wise Performance Bar Chart Breakdown', x, y + 6, { width: chartW, align: 'center' });
+
+    // Legend
+    const legends = [
+        { label: 'FCD', color: '#2563EB' },
+        { label: 'FC', color: '#DC2626' },
+        { label: 'SC', color: '#16A34A' },
+        { label: 'Pass', color: '#10B981' },
+        { label: 'AB', color: '#C58CB5' },
+        { label: 'WH', color: '#7CBCE8' },
+        { label: 'Fail', color: '#B8860B' },
+        { label: 'Tot Pass', color: '#F43F5E' },
+        { label: '%', color: '#84CC16' }
+    ];
+
+    let legX = x + 15;
+    legends.forEach(leg => {
+        doc.rect(legX, y + 18, 6, 6).fill(leg.color);
+        doc.fillColor('#334155').fontSize(5.5).font('Helvetica').text(leg.label, legX + 8, y + 18);
+        legX += 50;
+    });
+
+    const subCount = subjects.length || 1;
+    const maxVal = Math.max(...subjects.map(s => {
+        const stat = computedSubStatsMap[s.name] || s;
+        return Math.max(stat.appearedCount || 0, 100);
+    }), 100);
+
+    const numTicks = 4;
+    for (let t = 0; t <= numTicks; t++) {
+        const val = Math.round((maxVal / numTicks) * t);
+        const gy = y + padT + plotH - (val / maxVal) * plotH;
+        doc.moveTo(x + padL, gy).lineTo(x + padL + plotW, gy).stroke('#F1F5F9');
+        doc.fillColor('#94A3B8').fontSize(6).font('Helvetica').text(`${val}`, x + 2, gy - 3, { width: padL - 6, align: 'right' });
+    }
+
+    const groupW = plotW / subCount;
+    const numBars = 9;
+    const barW = Math.max(3, (groupW - 6) / numBars);
+
+    subjects.forEach((sub, sIdx) => {
+        const stat = computedSubStatsMap[sub.name] || sub;
+        const vals = [
+            { val: stat.fcdCount || 0, color: '#2563EB' },
+            { val: stat.fcCount || 0, color: '#DC2626' },
+            { val: stat.scCount || 0, color: '#16A34A' },
+            { val: stat.passClassCount || 0, color: '#10B981' },
+            { val: stat.abCount || 0, color: '#C58CB5' },
+            { val: stat.withHeldCount || 0, color: '#7CBCE8' },
+            { val: stat.failCount || 0, color: '#B8860B' },
+            { val: stat.totalPassCount || 0, color: '#F43F5E' },
+            { val: parseFloat(Number(stat.passPercentage || 0).toFixed(1)), color: '#84CC16' }
+        ];
+
+        const gx = x + padL + sIdx * groupW + 3;
+        vals.forEach((item, bIdx) => {
+            const bH = maxVal > 0 ? (item.val / maxVal) * plotH : 0;
+            const bx = gx + bIdx * barW;
+            const by = y + padT + plotH - bH;
+            if (bH > 0) {
+                doc.rect(bx, by, barW - 0.5, bH).fill(item.color);
+            }
+        });
+
+        // Subject code label
+        const codeText = getShortCode(sub.name);
+        doc.fillColor('#1E293B').fontSize(5.5).font('Helvetica-Bold').text(codeText, gx - 2, y + padT + plotH + 4, { width: groupW, align: 'center', lineBreak: false });
+    });
+}
+
 module.exports = {
     generateResultPDF
 };
+

@@ -44,17 +44,20 @@ function formatSubjectHeader(rawHeader) {
 }
 
 /**
- * Universal Entry Point to parse PDF, Excel, and CSV files
+ * Universal Entry Point to parse PDF, Excel, CSV, and Text files
  */
 async function parseResultFile(buffer, originalname = '', mimetype = '') {
     const ext = (originalname || '').split('.').pop().toLowerCase();
     
     if (ext === 'pdf' || mimetype === 'application/pdf') {
         return await parsePDFBuffer(buffer);
+    } else if (ext === 'txt' || mimetype === 'text/plain') {
+        return parseTextBuffer(buffer);
     } else {
         return parseSpreadsheetBuffer(buffer);
     }
 }
+
 
 /**
  * Parse Excel (.xlsx, .xls) and CSV (.csv) files
@@ -417,6 +420,23 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
     let overallPassClass = 0;
     let overallTotalPass = 0;
 
+    // Determine maximum marks per subject dynamically (e.g. BINT803B / Industry Internship = 200 marks)
+    const subjectMaxMarksMap = {};
+    let batchMaxTotal = 0;
+
+    subjectNames.forEach(sub => {
+        let is200 = /BINT803|INTERNSHIP/i.test(sub);
+        if (!is200) {
+            is200 = rawStudents.some(st => {
+                const m = Number(st.marks?.[sub]) || Number(st.subjectDetails?.[sub]?.total) || 0;
+                return m > 100;
+            });
+        }
+        const maxMarks = is200 ? 200 : 100;
+        subjectMaxMarksMap[sub] = maxMarks;
+        batchMaxTotal += maxMarks;
+    });
+
     const studentDocs = rawStudents.map(student => {
         let studentTotal = 0;
         let failedSubjectsCount = 0;
@@ -425,11 +445,17 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
 
         subjectNames.forEach(sub => {
             const stat = subjectStatsMap[sub];
+            const subMax = subjectMaxMarksMap[sub] || 100;
+            const passThreshold = subMax * 0.35; // 35 for 100m, 70 for 200m
+            const fcdThreshold = subMax * 0.70;  // 70 for 100m, 140 for 200m
+            const fcThreshold = subMax * 0.60;   // 60 for 100m, 120 for 200m
+            const scThreshold = passThreshold;   // 35 for 100m, 70 for 200m
+
             const detail = detailsMap[sub] || {
                 in: 0,
                 ex: 0,
                 total: Number(student.marks[sub]) || 0,
-                result: (Number(student.marks[sub]) || 0) >= 35 ? 'P' : 'F'
+                result: (Number(student.marks[sub]) || 0) >= passThreshold ? 'P' : 'F'
             };
 
             const mark = Number(detail.total) || 0;
@@ -451,24 +477,25 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
                 stat.appearedCount++;
                 if (mark > stat.highestMarks) stat.highestMarks = mark;
 
-                if (res === 'F' || res === 'FAIL' || mark < 35) {
+                if (res === 'F' || res === 'FAIL' || mark < passThreshold) {
                     stat.failCount++;
                     failedSubjectsCount++;
                 } else {
-                    // Pass category breakdown per subject
-                    if (mark >= 70) stat.fcdCount++;
-                    else if (mark >= 60) stat.fcCount++;
-                    else if (mark > 35) stat.scCount++;
-                    else if (mark === 35) stat.passClassCount++; // Strictly 35
+                    // Standard College Subject Breakdown:
+                    // FCD: >= 70%, FC: 60%-69%, SC: >35% and <60%, Pass Class: strictly == 35%
+                    if (mark >= fcdThreshold) stat.fcdCount++;
+                    else if (mark >= fcThreshold) stat.fcCount++;
+                    else if (mark > scThreshold) stat.scCount++;
+                    else stat.passClassCount++; // Strictly pass threshold (= 35)
                 }
             }
         });
 
-        const maxTotal = subjectNames.length * 100;
+        const maxTotal = batchMaxTotal > 0 ? batchMaxTotal : (subjectNames.length * 100);
         const percentage = maxTotal > 0 ? parseFloat(((studentTotal / maxTotal) * 100).toFixed(2)) : 0;
 
-        // Overall passing criteria: 0 failed subjects AND percentage >= 35% (Fail is >= 1 failed subject or < 35%)
-        const isPass = failedSubjectsCount === 0 && percentage >= 35.0;
+        // Overall passing criteria: 0 failed subjects AND NOT withheld AND percentage >= 35%
+        const isPass = failedSubjectsCount === 0 && !hasWithHeld && percentage >= 35.0;
         let remark = 'FAIL';
         if (hasWithHeld) {
             remark = 'WITHHELD';
@@ -525,9 +552,10 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
         percentage: s.percentage
     }));
 
-    // Overall Batch Statistics (matching Pic 1 & Pic 2)
+    // Overall Batch Statistics
     const totalStudents = rawStudents.length;
-    const overallFail = totalStudents - overallTotalPass;
+    const overallWithHeld = studentDocs.filter(s => s.remark === 'WITHHELD').length;
+    const overallFail = studentDocs.filter(s => s.remark === 'FAIL').length;
 
     const overallStats = {
         totalStudents: totalStudents,
@@ -537,6 +565,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
         scCount: overallSC,
         passClassCount: overallPassClass,
         failCount: overallFail,
+        withHeldCount: overallWithHeld,
         passCount: overallTotalPass,
         passPercentage: totalStudents > 0 ? parseFloat(((overallTotalPass / totalStudents) * 100).toFixed(2)) : 0
     };
@@ -784,6 +813,186 @@ async function parsePDFBuffer(buffer) {
     return buildResultDocument(finalStudents, subjectNames);
 }
 
+/**
+ * Parse raw text format result data (e.g. VTU portal / tab-separated student records)
+ */
+function parseTextBuffer(buffer) {
+    const textContent = buffer.toString('utf-8');
+    if (!textContent || !textContent.trim()) {
+        throw new Error('Text file is empty.');
+    }
+
+    const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const rawStudents = [];
+    const subjectsMap = new Map(); // code -> formatted subject header
+
+    let currentStudent = null;
+    let collegeName = "KLE Society's KLE College of Engineering and Technology, Chikodi";
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Check for college name hints
+        if (/college|institute|university|technology|engineering|vidyapeeth/i.test(line) && !/university\s*seat\s*number/i.test(line)) {
+            if (line.length > 10 && line.length < 120 && !line.includes('\t')) {
+                collegeName = line;
+            }
+        }
+
+        // 1. Detect start of a student block: e.g. "University Seat Number\t2KD22CS053" or "2KD22CS053"
+        const usnMatch = line.match(VTU_USN_REGEX) || line.match(GENERIC_USN_REGEX);
+        const isUsnLine = /university\s*seat\s*number|usn|roll\s*no|seat\s*no/i.test(line) && usnMatch;
+
+        if (isUsnLine || (usnMatch && (line.startsWith(usnMatch[0]) || line.endsWith(usnMatch[0])))) {
+            if (currentStudent && currentStudent.usn && Object.keys(currentStudent.marks).length > 0) {
+                rawStudents.push(currentStudent);
+            }
+
+            const usn = usnMatch[1].toUpperCase();
+            currentStudent = {
+                usn: usn,
+                name: 'Unknown',
+                marks: {},
+                subjectDetails: {}
+            };
+            continue;
+        }
+
+        // 2. Student Name line: e.g. "Student Name\tMILIND SITALE" or "Name: MILIND SITALE"
+        if (currentStudent && (/student\s*name|candidate\s*name|^name\b/i.test(line))) {
+            const parts = line.split(/[:\t]+/).map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+                currentStudent.name = parts.slice(1).join(' ').trim();
+            } else {
+                const cleaned = line.replace(/^(student\s*name|candidate\s*name|name)\s*[:\-]?\s*/i, '').trim();
+                if (cleaned) currentStudent.name = cleaned;
+            }
+            continue;
+        }
+
+        // 3. Skip table header lines or non-subject metadata
+        if (/subject\s*code|announced\s*\/\s*updated|semester\s*:/i.test(line)) {
+            continue;
+        }
+
+        // 4. Parse Subject Record Line
+        // Examples:
+        // "BCS801\tPROFESSIONAL ELECTIVE COURSE [DATA ANALYTICS WITH PYTHON]\t46\t45\t91\tP\t2026-05-22"
+        // "BCS801\tPROFESSIONAL ELECTIVE COURSE\tW\tW\tW\tW\t2026-05-22"
+        // "BCS601   CLOUD COMPUTING   40   40   80   P   2026-06-30"
+        if (currentStudent) {
+            // Split by tab or 2+ consecutive spaces
+            let tokens = line.includes('\t') ? line.split('\t').map(t => t.trim()) : line.split(/\s{2,}/).map(t => t.trim());
+            tokens = tokens.filter(t => t.length > 0);
+
+            // Check if first token matches a subject code pattern (e.g. BCS801, 21CS31, BINT803B, BYOK658, etc.)
+            const subCodeMatch = tokens[0] && tokens[0].match(/^([A-Z]{2,5}\d{2,4}[A-Z0-9]*|\d{2}[A-Z]{2,4}\d{2,4}[A-Z0-9]*)$/i);
+            
+            if (subCodeMatch && !VTU_USN_REGEX.test(tokens[0])) {
+                const subCode = subCodeMatch[1].toUpperCase();
+                let subTitle = '';
+                let inMarks = 0;
+                let exMarks = 0;
+                let totalMarks = 0;
+                let result = 'P';
+                let isAbsent = false;
+                let isWithHeld = false;
+
+                if (tokens.length >= 5) {
+                    // Standard tab-delimited columns: Code, Name, Internal, External, Total, Result, Date
+                    subTitle = tokens[1] || '';
+                    const inStr = (tokens[2] || '').toUpperCase();
+                    const exStr = (tokens[3] || '').toUpperCase();
+                    const totStr = (tokens[4] || '').toUpperCase();
+                    const resStr = (tokens[5] || '').toUpperCase();
+
+                    if (inStr === 'W' || exStr === 'W' || totStr === 'W' || resStr === 'W') {
+                        isWithHeld = true;
+                        result = 'W';
+                    } else if (inStr === 'A' || inStr === 'AB' || exStr === 'A' || exStr === 'AB' || totStr === 'A' || totStr === 'AB' || resStr === 'A' || resStr === 'AB') {
+                        isAbsent = true;
+                        result = 'AB';
+                        inMarks = Number(inStr) || 0;
+                        exMarks = Number(exStr) || 0;
+                        totalMarks = inMarks + exMarks;
+                    } else {
+                        inMarks = Number(inStr) || 0;
+                        exMarks = Number(exStr) || 0;
+                        totalMarks = Number(totStr) || (inMarks + exMarks);
+                        result = resStr ? (resStr.startsWith('P') ? 'P' : resStr.startsWith('F') ? 'F' : resStr) : (totalMarks >= 35 ? 'P' : 'F');
+                    }
+                } else if (tokens.length >= 3) {
+                    // Short / compressed format: Code, Name, Total
+                    subTitle = tokens[1] || '';
+                    const lastToken = tokens[tokens.length - 1];
+                    totalMarks = Number(lastToken) || 0;
+                    result = totalMarks >= 35 ? 'P' : 'F';
+                }
+
+                // Format subject title with code
+                let formattedHeader = subCode;
+                if (subTitle) {
+                    formattedHeader = `${subTitle} (${subCode})`;
+                }
+                
+                if (!subjectsMap.has(subCode) || (!subjectsMap.get(subCode).includes('(') && formattedHeader.includes('('))) {
+                    subjectsMap.set(subCode, formattedHeader);
+                }
+
+                const resolvedHeader = subjectsMap.get(subCode) || formattedHeader;
+                currentStudent.marks[resolvedHeader] = totalMarks;
+                currentStudent.subjectDetails[resolvedHeader] = {
+                    in: inMarks,
+                    ex: exMarks,
+                    total: totalMarks,
+                    result: result,
+                    isAbsent: isAbsent,
+                    isWithHeld: isWithHeld,
+                    announcedDate: tokens[6] || ''
+                };
+            }
+        }
+    }
+
+    if (currentStudent && currentStudent.usn && Object.keys(currentStudent.marks).length > 0) {
+        rawStudents.push(currentStudent);
+    }
+
+    if (rawStudents.length === 0) {
+        throw new Error('No valid student records detected in the text file.');
+    }
+
+    // Ensure all subjects found are ordered and known
+    const allSubjectHeaders = Array.from(subjectsMap.values());
+
+    // Normalize student records so every student has an entry for all subjects in batch
+    rawStudents.forEach(student => {
+        allSubjectHeaders.forEach(sub => {
+            if (student.marks[sub] === undefined) {
+                // Check if mapped under alternate key
+                const matchKey = Object.keys(student.marks).find(k => k === sub || (sub.includes('(') && k.includes(sub.split('(')[1])));
+                if (matchKey) {
+                    student.marks[sub] = student.marks[matchKey];
+                    student.subjectDetails[sub] = student.subjectDetails[matchKey];
+                } else {
+                    student.marks[sub] = 0;
+                    student.subjectDetails[sub] = {
+                        in: 0,
+                        ex: 0,
+                        total: 0,
+                        result: 'F',
+                        isAbsent: true,
+                        isWithHeld: false
+                    };
+                }
+            }
+        });
+    });
+
+    return buildResultDocument(rawStudents, allSubjectHeaders, collegeName);
+}
+
 module.exports = {
     parseResultFile
 };
+

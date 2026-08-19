@@ -40,13 +40,13 @@ function getSubjectTitleWithCode(sub, index) {
 }
 
 /**
- * Dynamically extract semester, branch, academic year, and RV status from filename
+ * Dynamically extract semester, branch, academic year, and RV status from filename & data
  */
-function extractMetadata(filename) {
-    const fn = filename || '';
+function extractMetadata(filename, collegeName = '', subjects = [], students = [], uploadDate = null) {
+    const fn = `${filename || ''} ${collegeName || ''}`;
 
-    // Extract academic year (e.g. 2025-26, 2025-2026)
-    let academicYear = '2025-26';
+    // 1. Extract academic year range from filename or college header (e.g. 2025-26, 2024-25, 2025-2026)
+    let academicYear = '';
     const yearMatch = fn.match(/(20\d{2})[-_](\d{2,4})/);
     if (yearMatch) {
         const y1 = yearMatch[1];
@@ -54,7 +54,47 @@ function extractMetadata(filename) {
         academicYear = `${y1}-${y2}`;
     }
 
-    // Extract semester & branch (e.g. IV Sem-CSE, 4th Sem CSE, 6th Sem, etc.)
+    // 2. Extract from student exam announced dates in data (e.g. 2026-06-30, 2025-07-15, 2024-01-15)
+    if (!academicYear && students && students.length > 0) {
+        let foundDateYear = null;
+        let foundDateMonth = null;
+        for (const st of students) {
+            const details = Object.values(st.subjectDetails || {});
+            for (const d of details) {
+                const dtStr = String(d?.announcedDate || d?.updatedOn || d?.date || '');
+                const m = dtStr.match(/(20\d{2})[-/](\d{1,2})/);
+                if (m) {
+                    foundDateYear = parseInt(m[1], 10);
+                    foundDateMonth = parseInt(m[2], 10);
+                    break;
+                }
+            }
+            if (foundDateYear) break;
+        }
+
+        if (foundDateYear) {
+            // In Indian university system: Jan-Sept results belong to previous-current academic year (e.g. June 2026 -> 2025-26)
+            if (foundDateMonth >= 1 && foundDateMonth <= 9) {
+                academicYear = `${foundDateYear - 1}-${String(foundDateYear % 100).padStart(2, '0')}`;
+            } else {
+                academicYear = `${foundDateYear}-${String((foundDateYear + 1) % 100).padStart(2, '0')}`;
+            }
+        }
+    }
+
+    // 3. If still not found, check single year in filename or uploadDate
+    if (!academicYear) {
+        const singleYearMatch = fn.match(/\b(20\d{2})\b/);
+        let baseYear = singleYearMatch ? parseInt(singleYearMatch[1], 10) : (uploadDate ? new Date(uploadDate).getFullYear() : new Date().getFullYear());
+        let baseMonth = uploadDate ? (new Date(uploadDate).getMonth() + 1) : (new Date().getMonth() + 1);
+        if (baseMonth >= 1 && baseMonth <= 8) {
+            academicYear = `${baseYear - 1}-${String(baseYear % 100).padStart(2, '0')}`;
+        } else {
+            academicYear = `${baseYear}-${String((baseYear + 1) % 100).padStart(2, '0')}`;
+        }
+    }
+
+    // Extract semester & branch (e.g. IV Sem-CSE, 6th Sem, etc.)
     let semesterBranch = 'IV Sem-CSE';
     const semMatch = fn.match(/\b(VIII|VII|VI|IV|V|III|II|I|\d+(?:st|nd|rd|th)?)\s*(?:Sem(?:ester)?)?[-_\s]*(CSE|ISE|ECE|EEE|ME|CV|AIML|DS)?\b/i);
     if (semMatch && semMatch[1]) {
@@ -69,10 +109,25 @@ function extractMetadata(filename) {
         else if (sem === '2' || sem === '2ND') sem = 'II';
         const branch = (semMatch[2] || 'CSE').toUpperCase();
         semesterBranch = `${sem} Sem-${branch}`;
+    } else if (subjects && subjects.length > 0) {
+        // Fallback detection from subject code numbers
+        const sampleSub = (subjects[0]?.name || '').toUpperCase();
+        if (/BCS8|BINT8|80\d/i.test(sampleSub)) semesterBranch = 'VIII Sem-CSE';
+        else if (/BCS7|70\d/i.test(sampleSub)) semesterBranch = 'VII Sem-CSE';
+        else if (/BCS6|60\d/i.test(sampleSub)) semesterBranch = 'VI Sem-CSE';
+        else if (/BCS5|50\d/i.test(sampleSub)) semesterBranch = 'V Sem-CSE';
+        else if (/BCS4|40\d/i.test(sampleSub)) semesterBranch = 'IV Sem-CSE';
+        else if (/BCS3|30\d/i.test(sampleSub)) semesterBranch = 'III Sem-CSE';
     }
 
     const isAfterRV = /after\s*rv|after\s*reval/i.test(fn);
-    const rvTag = isAfterRV ? '[After RV]' : '[Before RV]';
+    const isBeforeRV = /before\s*rv|before\s*reval/i.test(fn);
+    let rvTag = '';
+    if (isAfterRV) {
+        rvTag = '[After RV]';
+    } else if (isBeforeRV) {
+        rvTag = '[Before RV]';
+    }
 
     return { academicYear, semesterBranch, rvTag };
 }
@@ -145,14 +200,14 @@ function formatSlide1CollegeTitle(rawName) {
 }
 
     // Dynamic metadata extracted from current file, header banners, and subject codes
-    const meta = extractMetadata(result.filename, result.collegeName, subjects, result.uploadDate);
+    const meta = extractMetadata(result.filename, result.collegeName, subjects, students, result.uploadDate);
     const semesterBranch = meta.semesterBranch;
     const academicYear = meta.academicYear;
     const rvTag = meta.rvTag;
 
     const collegeTitle = formatSlide1CollegeTitle(result.collegeName);
     const deptTitle = "Dept. of Computer Science & Engg.";
-    const analysisTitle = `Result Analysis-${academicYear} ${rvTag}`;
+    const analysisTitle = rvTag ? `Result Analysis-${academicYear} ${rvTag}` : `Result Analysis-${academicYear}`;
 
     // =========================================================================
     // SLIDE 1: TITLE SLIDE (Matching Pic 2 format)
@@ -396,6 +451,15 @@ function formatSlide1CollegeTitle(rawName) {
 
     // Compute live subject stats (strictly FCD: >=70, FC: 60-69, SC: 36-59, Pass: ===35, Fail: <35)
     const computedSubStats = subjects.map(sub => {
+        const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || (students || []).some(st => {
+            const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+            return m > 100;
+        });
+        const passThreshold = is200 ? 70 : 35;
+        const fcdThreshold = is200 ? 140 : 70;
+        const fcThreshold = is200 ? 120 : 60;
+        const scThreshold = is200 ? 70 : 35;
+
         let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
         students.forEach(st => {
             const det = st.subjectDetails?.[sub.name] || {};
@@ -412,16 +476,16 @@ function formatSlide1CollegeTitle(rawName) {
                 appeared++;
             } else {
                 appeared++;
-                if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                if (mark < passThreshold || resUpper === 'F' || resUpper === 'FAIL') {
                     fail++;
-                } else if (mark >= 70) {
+                } else if (mark >= fcdThreshold) {
                     fcd++;
-                } else if (mark >= 60) {
+                } else if (mark >= fcThreshold) {
                     fc++;
-                } else if (mark > 35) {
+                } else if (mark > scThreshold) {
                     sc++;
-                } else if (mark === 35) {
-                    passClass++; // Strictly 35
+                } else if (mark === passThreshold) {
+                    passClass++; // Strictly pass threshold
                 }
             }
         });

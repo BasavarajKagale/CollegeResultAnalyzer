@@ -5,6 +5,15 @@ import { socket } from '../services/socket';
 import { FileSpreadsheet, FileText, Presentation, Trophy, Users, BookOpen, ExternalLink, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import SubjectModal from '../components/SubjectModal';
 
+const getSubjectCode = (name: string) => {
+    if (!name) return '';
+    const match = name.match(/\(([^)]+)\)/);
+    if (match) return match[1].trim();
+    const codeMatch = name.match(/^([A-Z]{2,5}\d{2,4}[A-Z0-9]*|\d{2}[A-Z]{2,4}\d{2,4}[A-Z0-9]*)/i);
+    if (codeMatch) return codeMatch[1].toUpperCase();
+    return name.split(' ')[0];
+};
+
 const ResultDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -40,11 +49,22 @@ const ResultDetails = () => {
 
     // Live accurate computed statistics per subject (excluding absent from appeared)
     const computedSubStatsMap = useMemo(() => {
-        if (!data?.result?.subjects || !data?.students) return {};
-        const map: Record<string, any> = {};
-        data.result.subjects.forEach((sub: any) => {
+        if (!data || !data.result || !data.students) return {};
+        const { result, students } = data;
+        const map: any = {};
+        
+        (result.subjects || []).forEach((sub: any) => {
+            const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || (students || []).some((st: any) => {
+                const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+                return m > 100;
+            });
+            const passThreshold = is200 ? 70 : 35;
+            const fcdThreshold = is200 ? 140 : 70;
+            const fcThreshold = is200 ? 120 : 60;
+            const scThreshold = is200 ? 70 : 35;
+
             let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
-            data.students.forEach((st: any) => {
+            students.forEach((st: any) => {
                 const det = st.subjectDetails?.[sub.name] || {};
                 const resUpper = (det.result || '').toUpperCase();
                 const inStr = String(det.in ?? '').trim().toUpperCase();
@@ -59,16 +79,16 @@ const ResultDetails = () => {
                     appeared++;
                 } else {
                     appeared++;
-                    if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                    if (mark < passThreshold || resUpper === 'F' || resUpper === 'FAIL') {
                         fail++;
-                    } else if (mark >= 70) {
+                    } else if (mark >= fcdThreshold) {
                         fcd++;
-                    } else if (mark >= 60) {
+                    } else if (mark >= fcThreshold) {
                         fc++;
-                    } else if (mark > 35) {
+                    } else if (mark > scThreshold) {
                         sc++;
-                    } else if (mark === 35) {
-                        passClass++; // Strictly 35
+                    } else if (mark === passThreshold) {
+                        passClass++; // Strictly pass threshold
                     }
                 }
             });
@@ -96,6 +116,15 @@ const ResultDetails = () => {
     if (!data) return <div style={{ textAlign: 'center', padding: '10rem' }}>Analysis Session Not Found.</div>;
 
     const { result, students } = data;
+
+    // Dynamically calculate total maximum marks (accounting for 200m subjects like BINT803B / Internship)
+    const maxTotalMarks = (result.subjects || []).reduce((acc: number, sub: any) => {
+        const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || (students || []).some((st: any) => {
+            const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+            return m > 100;
+        });
+        return acc + (is200 ? 200 : 100);
+    }, 0) || ((result.subjects?.length || 1) * 100);
 
     return (
         <div style={{ paddingBottom: '5rem' }}>
@@ -181,7 +210,7 @@ const ResultDetails = () => {
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>
-                                        {t.totalMarks}/{(result.subjects?.length || 1) * 100}
+                                        {t.totalMarks}/{maxTotalMarks}
                                     </div>
                                     <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#fff' }}>{t.percentage}%</div>
                                 </div>
@@ -263,8 +292,8 @@ const ResultDetails = () => {
                                 <th style={{ padding: '0.8rem 0.5rem', textAlign: 'left' }}>Std Name</th>
                                 <th style={{ padding: '0.8rem 0.5rem', textAlign: 'left' }}>USN</th>
                                 {result.subjects.map((s: any) => (
-                                    <th key={s.name} style={{ padding: '0.8rem 0.4rem', textAlign: 'center', width: '65px' }}>
-                                        {s.name.split(' ')[0]}
+                                    <th key={s.name} title={s.name} style={{ padding: '0.8rem 0.4rem', textAlign: 'center', width: '65px' }}>
+                                        {getSubjectCode(s.name)}
                                     </th>
                                 ))}
                                 <th style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '85px' }}>Total</th>
@@ -364,7 +393,7 @@ const ResultDetails = () => {
                                             );
                                         })}
                                         <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '0.6rem 0.5rem' }}>
-                                            {s.totalMarks}/{(result.subjects?.length || 1) * 100}
+                                            {s.totalMarks}/{maxTotalMarks}
                                         </td>
                                         <td style={{ textAlign: 'center', fontWeight: 600, padding: '0.6rem 0.5rem' }}>{s.percentage}%</td>
                                         <td style={{ 
@@ -425,7 +454,7 @@ const ResultDetails = () => {
                             <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
                                 <th style={{ padding: '0.7rem', textAlign: 'left' }}>Metric</th>
                                 {result.subjects.map((sub: any) => (
-                                    <th key={sub.name} style={{ padding: '0.7rem' }}>{sub.name.split(' ')[0]}</th>
+                                    <th key={sub.name} title={sub.name} style={{ padding: '0.7rem' }}>{getSubjectCode(sub.name)}</th>
                                 ))}
                                 <th style={{ padding: '0.7rem', color: 'var(--primary)' }}>Overall Batch</th>
                             </tr>
@@ -438,8 +467,8 @@ const ResultDetails = () => {
                                 { label: 'SC', key: 'scCount', overall: result.overallStats.scCount || 0 },
                                 { label: 'Pass', key: 'passClassCount', overall: result.overallStats.passClassCount || 0 },
                                 { label: 'Fail', key: 'failCount', overall: result.overallStats.failCount || 0 },
-                                { label: 'AB', key: 'abCount', overall: '-' },
-                                { label: 'With Held', key: 'withHeldCount', overall: '-' },
+                                { label: 'AB', key: 'abCount', overall: (students || []).filter((s: any) => Object.values(s.subjectDetails || {}).some((d: any) => d.isAbsent)).length || '-' },
+                                { label: 'With Held', key: 'withHeldCount', overall: result.overallStats.withHeldCount || (students || []).filter((s: any) => s.remark === 'WITHHELD').length || 0 },
                                 { label: 'Percentage', key: 'passPercentage', isPct: true, overall: `${(result.overallStats.passPercentage || 0).toFixed(2)}%` }
                             ].map((m: any, idx: number) => (
                                 <tr key={m.label} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>

@@ -8,26 +8,84 @@ const { parseResultFile } = require('../utils/parser');
 const { generateResultPDF } = require('../utils/pdfGenerator');
 const { generateResultPPT } = require('../utils/pptGenerator');
 
-function fetchChartImage(chartConfig, width = 600, height = 340) {
+function getShortCode(subjectName) {
+    if (!subjectName) return 'SUB';
+    const match = subjectName.match(/\(([^)]+)\)/);
+    if (match) return match[1].trim();
+    const codeMatch = subjectName.match(/^([A-Z]{2,5}\d{2,4}[A-Z0-9]*|\d{2}[A-Z]{2,4}\d{2,4}[A-Z0-9]*)/i);
+    if (codeMatch) return codeMatch[1].toUpperCase();
+    if (subjectName.length > 8) return subjectName.substring(0, 7) + '.';
+    return subjectName;
+}
+
+/**
+ * Fetch PNG chart image buffer from QuickChart API using HTTP POST with retry and 15s timeout
+ */
+function fetchChartImage(chartConfig, width = 600, height = 340, retries = 2) {
     return new Promise((resolve) => {
-        try {
-            const url = `https://quickchart.io/chart?w=${width}&h=${height}&bkg=white&f=png&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
-            const req = https.get(url, (res) => {
-                if (res.statusCode !== 200) return resolve(null);
-                const chunks = [];
-                res.on('data', (chunk) => chunks.push(chunk));
-                res.on('end', () => resolve(Buffer.concat(chunks)));
-            });
-            req.on('error', () => resolve(null));
-            req.setTimeout(4000, () => {
-                req.destroy();
+        const attempt = (remainingRetries) => {
+            try {
+                const data = JSON.stringify({
+                    chart: chartConfig,
+                    width: width,
+                    height: height,
+                    backgroundColor: 'white',
+                    format: 'png'
+                });
+
+                const options = {
+                    hostname: 'quickchart.io',
+                    port: 443,
+                    path: '/chart',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(data)
+                    },
+                    timeout: 15000 // 15s timeout for complex multi-bar charts
+                };
+
+                const req = https.request(options, (res) => {
+                    if (res.statusCode !== 200) {
+                        if (remainingRetries > 0) {
+                            return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                        }
+                        return resolve(null);
+                    }
+                    const chunks = [];
+                    res.on('data', (chunk) => chunks.push(chunk));
+                    res.on('end', () => resolve(Buffer.concat(chunks)));
+                });
+
+                req.on('error', () => {
+                    if (remainingRetries > 0) {
+                        return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                    }
+                    resolve(null);
+                });
+
+                req.on('timeout', () => {
+                    req.destroy();
+                    if (remainingRetries > 0) {
+                        return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                    }
+                    resolve(null);
+                });
+
+                req.write(data);
+                req.end();
+            } catch (err) {
+                if (remainingRetries > 0) {
+                    return setTimeout(() => attempt(remainingRetries - 1), 1000);
+                }
                 resolve(null);
-            });
-        } catch (err) {
-            resolve(null);
-        }
+            }
+        };
+
+        attempt(retries);
     });
 }
+
 
 const uploadResult = async (req, res) => {
     try {
@@ -93,7 +151,13 @@ const exportExcel = async (req, res) => {
         const workbook = new ExcelJS.Workbook();
         const subjects = result.subjects || [];
         const stats = result.overallStats || { totalStudents: 0, passCount: 0, failCount: 0, passPercentage: 0 };
-        const maxTotalMarks = (subjects.length || 1) * 100;
+        const maxTotalMarks = subjects.reduce((acc, sub) => {
+            const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some(st => {
+                const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+                return m > 100;
+            });
+            return acc + (is200 ? 200 : 100);
+        }, 0) || ((subjects.length || 1) * 100);
 
         // -------------------------------------------------------------
         // SINGLE UNIFIED WORKSHEET: Student Result Sheet & All Analytics
@@ -323,9 +387,18 @@ const exportExcel = async (req, res) => {
         sheet.mergeCells(matrixTitleRow.number, 1, matrixTitleRow.number, totalSheetCols);
         sheet.getRow(matrixTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
 
-        // Dynamically calculate live subject statistics (Strictly: FCD>=70, FC: 60-69, SC: 36-59, Pass: ===35, Fail: <35)
+        // Dynamically calculate live subject statistics (Strictly: FCD>=70%, FC: 60-69%, SC: 36-59%, Pass: ===35%, Fail: <35%)
         const computedSubStatsMap = {};
         subjects.forEach(sub => {
+            const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some(st => {
+                const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
+                return m > 100;
+            });
+            const passThreshold = is200 ? 70 : 35;
+            const fcdThreshold = is200 ? 140 : 70;
+            const fcThreshold = is200 ? 120 : 60;
+            const scThreshold = is200 ? 70 : 35;
+
             let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
             students.forEach(st => {
                 const det = st.subjectDetails?.[sub.name] || {};
@@ -342,16 +415,16 @@ const exportExcel = async (req, res) => {
                     appeared++;
                 } else {
                     appeared++;
-                    if (mark < 35 || resUpper === 'F' || resUpper === 'FAIL') {
+                    if (mark < passThreshold || resUpper === 'F' || resUpper === 'FAIL') {
                         fail++;
-                    } else if (mark >= 70) {
+                    } else if (mark >= fcdThreshold) {
                         fcd++;
-                    } else if (mark >= 60) {
+                    } else if (mark >= fcThreshold) {
                         fc++;
-                    } else if (mark > 35) {
+                    } else if (mark > scThreshold) {
                         sc++;
-                    } else if (mark === 35) {
-                        passClass++; // Strictly 35
+                    } else if (mark === passThreshold) {
+                        passClass++; // Strictly pass threshold
                     }
                 }
             });
@@ -615,17 +688,17 @@ const exportExcel = async (req, res) => {
             const chart2Config = {
                 type: 'bar',
                 data: {
-                    labels: subjects.map(s => (s.name || '').split(' ')[0]),
+                    labels: subjects.map(s => getShortCode(s.name)),
                     datasets: [
-                        { label: 'FCD', backgroundColor: '#2563EB', data: subjects.map(s => s.fcdCount || 0) },
-                        { label: 'FC', backgroundColor: '#DC2626', data: subjects.map(s => s.fcCount || 0) },
-                        { label: 'SC', backgroundColor: '#16A34A', data: subjects.map(s => s.scCount || 0) },
-                        { label: 'Pass', backgroundColor: '#8B5CF6', data: subjects.map(s => s.passClassCount || 0) },
-                        { label: 'AB', backgroundColor: '#06B6D4', data: subjects.map(s => s.abCount || 0) },
-                        { label: 'With Held', backgroundColor: '#F97316', data: subjects.map(s => s.withHeldCount || 0) },
-                        { label: 'Fail', backgroundColor: '#93C5FD', data: subjects.map(s => s.failCount || 0) },
-                        { label: 'Total Pass', backgroundColor: '#F43F5E', data: subjects.map(s => s.totalPassCount || 0) },
-                        { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat((s.passPercentage || 0).toFixed(2))) }
+                        { label: 'FCD', backgroundColor: '#2563EB', data: subjects.map(s => (computedSubStatsMap[s.name] || s).fcdCount || 0) },
+                        { label: 'FC', backgroundColor: '#DC2626', data: subjects.map(s => (computedSubStatsMap[s.name] || s).fcCount || 0) },
+                        { label: 'SC', backgroundColor: '#16A34A', data: subjects.map(s => (computedSubStatsMap[s.name] || s).scCount || 0) },
+                        { label: 'Pass', backgroundColor: '#8B5CF6', data: subjects.map(s => (computedSubStatsMap[s.name] || s).passClassCount || 0) },
+                        { label: 'AB', backgroundColor: '#06B6D4', data: subjects.map(s => (computedSubStatsMap[s.name] || s).abCount || 0) },
+                        { label: 'With Held', backgroundColor: '#F97316', data: subjects.map(s => (computedSubStatsMap[s.name] || s).withHeldCount || 0) },
+                        { label: 'Fail', backgroundColor: '#93C5FD', data: subjects.map(s => (computedSubStatsMap[s.name] || s).failCount || 0) },
+                        { label: 'Total Pass', backgroundColor: '#F43F5E', data: subjects.map(s => (computedSubStatsMap[s.name] || s).totalPassCount || 0) },
+                        { label: '%', backgroundColor: '#84CC16', data: subjects.map(s => parseFloat(((computedSubStatsMap[s.name] || s).passPercentage || 0).toFixed(2))) }
                     ]
                 },
                 options: {

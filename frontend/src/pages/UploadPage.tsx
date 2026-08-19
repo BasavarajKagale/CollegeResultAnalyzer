@@ -59,7 +59,7 @@ const UploadPage = () => {
                 }}>
                     <input 
                         type="file" 
-                        accept=".xlsx, .xls, .csv, .pdf" 
+                        accept=".xlsx, .xls, .csv, .pdf, .txt" 
                         onChange={handleFileChange}
                         style={{ 
                             position: 'absolute', 
@@ -77,7 +77,7 @@ const UploadPage = () => {
                         ) : (
                             <><UploadIcon size={48} style={{ color: '#888' }} />
                             <p style={{ marginTop: '1rem', fontWeight: 600 }}>Click or drag file here</p>
-                            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>Supports PDF (.pdf), Excel (.xlsx, .xls), or CSV (.csv)</p></>
+                            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>Supports PDF (.pdf), Excel (.xlsx, .xls), CSV (.csv), or Text (.txt)</p></>
                         )}
                     </div>
                 </div>

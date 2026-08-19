@@ -19,9 +19,14 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
         const isWithHeld = det.isWithHeld || resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
         const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || inStr === 'A' || inStr === 'AB');
         const mark = s.marks[subjectName] !== undefined ? Number(s.marks[subjectName]) : (det.total !== undefined ? Number(det.total) : 0);
+        const is200 = /BINT803|INTERNSHIP/i.test(subjectName || '') || students.some(st => {
+            const m = Number(st.marks?.[subjectName]) || Number(st.subjectDetails?.[subjectName]?.total) || 0;
+            return m > 100;
+        });
+        const passThreshold = is200 ? 70 : 35;
 
         let isPass = false;
-        if (!isWithHeld && !isAbsent && resUpper !== 'F' && resUpper !== 'FAIL' && mark >= 35) {
+        if (!isWithHeld && !isAbsent && resUpper !== 'F' && resUpper !== 'FAIL' && mark >= passThreshold) {
             isPass = true;
         }
 
