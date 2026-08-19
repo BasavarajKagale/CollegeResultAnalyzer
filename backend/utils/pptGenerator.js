@@ -409,7 +409,6 @@ function formatSlide1CollegeTitle(rawName) {
                 ab++;
             } else if (isWithHeld) {
                 withHeld++;
-                fail++;
                 appeared++;
             } else {
                 appeared++;

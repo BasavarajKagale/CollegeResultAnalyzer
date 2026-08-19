@@ -111,7 +111,6 @@ async function generateResultPDF(result, students, res) {
                 ab++;
             } else if (isWithHeld) {
                 withHeld++;
-                fail++;
                 appeared++;
             } else {
                 appeared++;
@@ -580,12 +579,13 @@ async function generateResultPDF(result, students, res) {
             const inVal = det.in !== undefined ? det.in : '';
             const exVal = det.ex !== undefined ? det.ex : '';
             const resUpper = (det.result || '').toUpperCase();
+            const inStr = String(det.in ?? '').trim().toUpperCase();
             const isWithHeld = det.isWithHeld || resUpper === 'WH' || resUpper === 'W' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
-            const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A');
+            const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || inStr === 'A' || inStr === 'AB');
             
-            let isSubPass = true;
-            if (isWithHeld || isAbsent || resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
-                isSubPass = false;
+            let isSubPass = false;
+            if (!isWithHeld && !isAbsent && resUpper !== 'F' && resUpper !== 'FAIL' && markVal >= 35) {
+                isSubPass = true;
             }
 
             return {
@@ -604,8 +604,9 @@ async function generateResultPDF(result, students, res) {
         // Sort students descending by subject mark
         subStudents.sort((a, b) => b.mark - a.mark);
 
-        const subToppers = subStudents.slice(0, 10);
-        const subFailed = subStudents.filter(s => !s.isPass);
+        const subToppers = subStudents.filter(s => s.isPass && !s.isWithHeld && !s.isAbsent).slice(0, 10);
+        const subFailed = subStudents.filter(s => !s.isPass && !s.isWithHeld);
+        const subWithHeld = subStudents.filter(s => s.isWithHeld);
 
         // -------------------------------------------------------------
         // Sub Table 1: Top 10 Subject Toppers
@@ -647,16 +648,21 @@ async function generateResultPDF(result, students, res) {
             doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((t.name || '-').substring(0, 28), rx + 4, currentY + 4, { width: subTopCols[2].width - 8 });
             rx += subTopCols[2].width;
 
-            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${t.in}`, rx + 4, currentY + 4, { width: subTopCols[3].width - 8, align: 'center' });
+            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${t.in !== undefined && t.in !== '' ? t.in : '-'}`, rx + 4, currentY + 4, { width: subTopCols[3].width - 8, align: 'center' });
             rx += subTopCols[3].width;
 
-            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${t.ex}`, rx + 4, currentY + 4, { width: subTopCols[4].width - 8, align: 'center' });
+            doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${t.ex !== undefined && t.ex !== '' ? t.ex : '-'}`, rx + 4, currentY + 4, { width: subTopCols[4].width - 8, align: 'center' });
             rx += subTopCols[4].width;
 
             doc.fillColor('#1E40AF').fontSize(8).font('Helvetica-Bold').text(`${t.mark}/100`, rx + 4, currentY + 4, { width: subTopCols[5].width - 8, align: 'center' });
             rx += subTopCols[5].width;
 
-            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('PASS', rx + 4, currentY + 4, { width: subTopCols[6].width - 8, align: 'center' });
+            let topperStatus = 'PASS';
+            if (t.mark >= 70) topperStatus = 'FCD';
+            else if (t.mark >= 60) topperStatus = 'FC';
+            else if (t.mark >= 50) topperStatus = 'SC';
+
+            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text(topperStatus, rx + 4, currentY + 4, { width: subTopCols[6].width - 8, align: 'center' });
 
             currentY += 16;
         });
@@ -664,7 +670,7 @@ async function generateResultPDF(result, students, res) {
         currentY += 12;
 
         // -------------------------------------------------------------
-        // Sub Table 2: Subject Failed Students List (Pic 1 Structure)
+        // Sub Table 2: Subject Failed Students List (Excluding Withheld)
         // -------------------------------------------------------------
         doc.fillColor('#B91C1C').fontSize(8.5).font('Helvetica-Bold').text(`• Failed Students List (${subFailed.length} Failed)`, margin + 4, currentY + 2);
         currentY += 14;
@@ -672,7 +678,7 @@ async function generateResultPDF(result, students, res) {
         if (subFailed.length === 0) {
             doc.rect(margin, currentY, contentWidth, 18).fill('#F0FDF4');
             doc.rect(margin, currentY, contentWidth, 18).stroke('#BBF7D0');
-            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('Nil (100% Pass Rate - All candidates cleared this subject)', margin + 10, currentY + 5);
+            doc.fillColor('#15803D').fontSize(7.5).font('Helvetica-Bold').text('Nil (100% Pass Rate - All appeared candidates cleared this subject)', margin + 10, currentY + 5);
             currentY += 24;
         } else {
             const subFailCols = [
@@ -695,13 +701,12 @@ async function generateResultPDF(result, students, res) {
 
             subFailed.forEach((f, idx) => {
                 checkPageBreak(16, `Subject: ${getShortCode(sub.name)} Failed List`);
-                const isWithHeld = f.result === 'WH' || f.result === 'W' || f.result === 'WITH HELD' || f.result === 'WITHHELD' || f.isWithHeld;
-                const isAbsent = !isWithHeld && (f.result === 'AB' || f.result === 'ABSENT' || f.result === 'A');
+                const isAbsent = f.result === 'AB' || f.result === 'ABSENT' || f.result === 'A' || f.isAbsent;
 
-                const rowBg = isWithHeld ? '#F0F9FF' : (isAbsent ? '#FAF5F8' : (idx % 2 === 0 ? '#FEF2F2' : '#FFFFFF'));
-                const strokeBg = isWithHeld ? '#BAE6FD' : (isAbsent ? '#E9D5E2' : '#FECACA');
-                const statusColor = isWithHeld ? '#0284C7' : (isAbsent ? '#C58CB5' : '#B91C1C');
-                const statusText = isWithHeld ? 'WITHHELD' : (isAbsent ? 'ABSENT' : 'FAIL');
+                const rowBg = isAbsent ? '#FAF5F8' : (idx % 2 === 0 ? '#FEF2F2' : '#FFFFFF');
+                const strokeBg = isAbsent ? '#E9D5E2' : '#FECACA';
+                const statusColor = isAbsent ? '#C58CB5' : '#B91C1C';
+                const statusText = isAbsent ? 'ABSENT' : 'FAIL';
 
                 doc.rect(margin, currentY, contentWidth, 16).fill(rowBg);
                 doc.rect(margin, currentY, contentWidth, 16).stroke(strokeBg);
@@ -710,7 +715,7 @@ async function generateResultPDF(result, students, res) {
                 doc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold').text(`${idx + 1}`, rx + 4, currentY + 4, { width: subFailCols[0].width - 8, align: 'center' });
                 rx += subFailCols[0].width;
 
-                doc.fillColor(isWithHeld ? '#0369A1' : (isAbsent ? '#862D6E' : '#991B1B')).fontSize(7.5).font('Helvetica-Bold').text(f.usn || '-', rx + 4, currentY + 4, { width: subFailCols[1].width - 8 });
+                doc.fillColor(isAbsent ? '#862D6E' : '#991B1B').fontSize(7.5).font('Helvetica-Bold').text(f.usn || '-', rx + 4, currentY + 4, { width: subFailCols[1].width - 8 });
                 rx += subFailCols[1].width;
 
                 doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((f.name || '-').substring(0, 28), rx + 4, currentY + 4, { width: subFailCols[2].width - 8 });
@@ -722,11 +727,73 @@ async function generateResultPDF(result, students, res) {
                 doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${f.ex !== undefined && f.ex !== '' ? f.ex : '-'}`, rx + 4, currentY + 4, { width: subFailCols[4].width - 8, align: 'center' });
                 rx += subFailCols[4].width;
 
-                const markDisplay = isWithHeld ? 'WH' : (isAbsent ? 'AB' : `${f.mark}/100`);
+                const markDisplay = isAbsent ? 'AB' : `${f.mark}/100`;
                 doc.fillColor(statusColor).fontSize(8).font('Helvetica-Bold').text(markDisplay, rx + 4, currentY + 4, { width: subFailCols[5].width - 8, align: 'center' });
                 rx += subFailCols[5].width;
 
                 doc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold').text(statusText, rx + 4, currentY + 4, { width: subFailCols[6].width - 8, align: 'center' });
+
+                currentY += 16;
+            });
+
+            currentY += 14;
+        }
+
+        // -------------------------------------------------------------
+        // Sub Table 3: Subject Withheld Students List (if any)
+        // -------------------------------------------------------------
+        if (subWithHeld.length > 0) {
+            checkPageBreak(36, `Subject: ${getShortCode(sub.name)} Withheld List`);
+            doc.fillColor('#0284C7').fontSize(8.5).font('Helvetica-Bold').text(`• Withheld Students List (${subWithHeld.length} Withheld)`, margin + 4, currentY + 2);
+            currentY += 14;
+
+            const subWhCols = [
+                { name: 'Sl No', width: 35, align: 'center' },
+                { name: 'USN', width: 85, align: 'left' },
+                { name: 'Student Name', width: 160, align: 'left' },
+                { name: 'IN', width: 45, align: 'center' },
+                { name: 'EX', width: 45, align: 'center' },
+                { name: 'Marks Obtained', width: 80, align: 'center' },
+                { name: 'Status', width: 65, align: 'center' }
+            ];
+
+            doc.rect(margin, currentY, contentWidth, 16).fill('#0369A1'); // Deep Ocean Blue header
+            let swx = margin;
+            subWhCols.forEach(c => {
+                doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text(c.name, swx + 4, currentY + 4, { width: c.width - 8, align: c.align });
+                swx += c.width;
+            });
+            currentY += 16;
+
+            subWithHeld.forEach((w, idx) => {
+                checkPageBreak(16, `Subject: ${getShortCode(sub.name)} Withheld List`);
+                const rowBg = idx % 2 === 0 ? '#F0F9FF' : '#FFFFFF';
+                const strokeBg = '#BAE6FD';
+                const statusColor = '#0284C7';
+
+                doc.rect(margin, currentY, contentWidth, 16).fill(rowBg);
+                doc.rect(margin, currentY, contentWidth, 16).stroke(strokeBg);
+
+                let rx = margin;
+                doc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold').text(`${idx + 1}`, rx + 4, currentY + 4, { width: subWhCols[0].width - 8, align: 'center' });
+                rx += subWhCols[0].width;
+
+                doc.fillColor('#0369A1').fontSize(7.5).font('Helvetica-Bold').text(w.usn || '-', rx + 4, currentY + 4, { width: subWhCols[1].width - 8 });
+                rx += subWhCols[1].width;
+
+                doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text((w.name || '-').substring(0, 28), rx + 4, currentY + 4, { width: subWhCols[2].width - 8 });
+                rx += subWhCols[2].width;
+
+                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${w.in !== undefined && w.in !== '' ? w.in : '-'}`, rx + 4, currentY + 4, { width: subWhCols[3].width - 8, align: 'center' });
+                rx += subWhCols[3].width;
+
+                doc.fillColor('#334155').fontSize(7.5).font('Helvetica').text(`${w.ex !== undefined && w.ex !== '' ? w.ex : '-'}`, rx + 4, currentY + 4, { width: subWhCols[4].width - 8, align: 'center' });
+                rx += subWhCols[4].width;
+
+                doc.fillColor(statusColor).fontSize(8).font('Helvetica-Bold').text('WH', rx + 4, currentY + 4, { width: subWhCols[5].width - 8, align: 'center' });
+                rx += subWhCols[5].width;
+
+                doc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold').text('WITHHELD', rx + 4, currentY + 4, { width: subWhCols[6].width - 8, align: 'center' });
 
                 currentY += 16;
             });

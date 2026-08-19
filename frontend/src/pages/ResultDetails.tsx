@@ -56,7 +56,6 @@ const ResultDetails = () => {
                     ab++;
                 } else if (isWithHeld) {
                     withHeld++;
-                    fail++;
                     appeared++;
                 } else {
                     appeared++;

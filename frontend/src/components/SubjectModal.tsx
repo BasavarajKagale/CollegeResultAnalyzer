@@ -20,9 +20,9 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
         const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || inStr === 'A' || inStr === 'AB');
         const mark = s.marks[subjectName] !== undefined ? Number(s.marks[subjectName]) : (det.total !== undefined ? Number(det.total) : 0);
 
-        let isPass = true;
-        if (isWithHeld || isAbsent || resUpper === 'F' || resUpper === 'FAIL' || mark < 35) {
-            isPass = false;
+        let isPass = false;
+        if (!isWithHeld && !isAbsent && resUpper !== 'F' && resUpper !== 'FAIL' && mark >= 35) {
+            isPass = true;
         }
 
         return {

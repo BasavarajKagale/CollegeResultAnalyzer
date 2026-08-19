@@ -446,8 +446,6 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
             } else if (isWithHeld) {
                 stat.withHeldCount++;
                 stat.appearedCount++;
-                stat.failCount++;
-                failedSubjectsCount++;
                 hasWithHeld = true;
             } else {
                 stat.appearedCount++;
