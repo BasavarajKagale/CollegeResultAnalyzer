@@ -8,7 +8,7 @@ interface SubjectModalProps {
 }
 
 const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onClose }) => {
-    const [activeTab, setActiveTab] = useState<'ranking' | 'failed' | 'withheld' | 'toppers'>('ranking');
+    const [activeTab, setActiveTab] = useState<'ranking' | 'failed' | 'absent' | 'withheld' | 'toppers'>('ranking');
 
     // Extract scores for this subject
     const subjectStudents = students.map(s => {
@@ -58,19 +58,22 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
 
     const passedStudents = sortedStudents.filter(s => s.isPass);
     const withheldStudents = sortedStudents.filter(s => s.isWithHeld);
-    const failedStudents = sortedStudents.filter(s => !s.isPass && !s.isWithHeld);
+    const absentStudents = sortedStudents.filter(s => s.isAbsent);
+    const failedStudents = sortedStudents.filter(s => !s.isPass && !s.isWithHeld && !s.isAbsent);
 
     const passCount = passedStudents.length;
     const withheldCount = withheldStudents.length;
+    const abCount = absentStudents.length;
     const failCount = failedStudents.length;
-    const evaluatedCount = Math.max(0, students.length - withheldCount);
+    const evaluatedCount = Math.max(1, students.length - withheldCount);
 
-    const passPercentage = evaluatedCount > 0 ? ((passCount / evaluatedCount) * 100).toFixed(1) : '0.0';
-    const failPercentage = evaluatedCount > 0 ? ((failCount / evaluatedCount) * 100).toFixed(1) : '0.0';
+    const passPercentage = ((passCount / evaluatedCount) * 100).toFixed(1);
+    const failPercentage = ((failCount / evaluatedCount) * 100).toFixed(1);
+    const abPercentage = ((abCount / evaluatedCount) * 100).toFixed(1);
 
     const highestMark = sortedStudents[0]?.mark || 0;
     const lowestMark = sortedStudents[sortedStudents.length - 1]?.mark || 0;
-    const avgMark = evaluatedCount > 0 ? (subjectStudents.filter(s => !s.isWithHeld).reduce((acc, s) => acc + s.mark, 0) / evaluatedCount).toFixed(1) : '0.0';
+    const avgMark = evaluatedCount > 0 ? (subjectStudents.filter(s => !s.isWithHeld && !s.isAbsent).reduce((acc, s) => acc + s.mark, 0) / Math.max(1, evaluatedCount - abCount)).toFixed(1) : '0.0';
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -105,6 +108,14 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                         <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#dc3545', margin: '0.2rem 0' }}>{failPercentage}%</div>
                         <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{failCount} / {evaluatedCount} Failed</div>
                     </div>
+
+                    {abCount > 0 && (
+                        <div style={{ background: 'rgba(197, 140, 181, 0.1)', border: '1px solid rgba(197, 140, 181, 0.35)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.7rem', color: '#C58CB5', textTransform: 'uppercase', fontWeight: 700 }}>Absent Rate</div>
+                            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#C58CB5', margin: '0.2rem 0' }}>{abPercentage}%</div>
+                            <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{abCount} / {evaluatedCount} Absent</div>
+                        </div>
+                    )}
 
                     {withheldCount > 0 && (
                         <div style={{ background: 'rgba(124, 188, 232, 0.1)', border: '1px solid rgba(124, 188, 232, 0.35)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
@@ -164,6 +175,23 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                     >
                         <AlertTriangle size={14} /> Failed Candidates ({failCount})
                     </button>
+
+                    {abCount > 0 && (
+                        <button 
+                            onClick={() => setActiveTab('absent')}
+                            className="btn"
+                            style={{ 
+                                padding: '0.5rem 1.2rem', 
+                                fontSize: '0.8rem',
+                                background: activeTab === 'absent' ? '#C58CB5' : 'rgba(197, 140, 181, 0.15)',
+                                color: activeTab === 'absent' ? '#000' : '#C58CB5',
+                                border: '1px solid rgba(197, 140, 181, 0.4)',
+                                fontWeight: 700
+                            }}
+                        >
+                            <AlertTriangle size={14} /> Absent Candidates ({abCount})
+                        </button>
+                    )}
 
                     {withheldCount > 0 && (
                         <button 
@@ -241,8 +269,8 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                         failedStudents.length === 0 ? (
                             <div style={{ padding: '3rem', textAlign: 'center', color: '#28a745' }}>
                                 <CheckCircle size={48} style={{ marginBottom: '1rem' }} />
-                                <h3>100% Success Rate!</h3>
-                                <p style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.5rem' }}>No candidate failed in this subject.</p>
+                                <h3>100% Exam Success Rate!</h3>
+                                <p style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.5rem' }}>No candidate failed in this subject exam.</p>
                             </div>
                         ) : (
                             <table style={{ margin: 0, width: '100%', borderSpacing: 0 }}>
@@ -251,20 +279,20 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                                         <th>USN</th>
                                         <th>Student Name</th>
                                         <th style={{ textAlign: 'center' }}>Marks Obtained</th>
-                                        <th style={{ textAlign: 'center' }}>Shortfall / Remarks</th>
+                                        <th style={{ textAlign: 'center' }}>Shortfall</th>
                                         <th style={{ textAlign: 'center' }}>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {failedStudents.map((s) => (
                                         <tr key={s.usn}>
-                                            <td className="nowrap" style={{ fontSize: '0.85rem', color: s.isAbsent ? '#C58CB5' : '#dc3545', fontWeight: 600 }}>{s.usn}</td>
+                                            <td className="nowrap" style={{ fontSize: '0.85rem', color: '#dc3545', fontWeight: 600 }}>{s.usn}</td>
                                             <td className="nowrap" style={{ fontWeight: 600 }}>{s.name}</td>
-                                            <td style={{ textAlign: 'center', fontWeight: 800, color: s.isAbsent ? '#C58CB5' : '#ff4d4d', fontSize: '1.1rem' }}>
-                                                {s.isAbsent ? 'AB' : `${s.mark} / ${is200 ? 200 : 100}`}
+                                            <td style={{ textAlign: 'center', fontWeight: 800, color: '#ff4d4d', fontSize: '1.1rem' }}>
+                                                {s.mark} / {is200 ? 200 : 100}
                                             </td>
-                                            <td style={{ textAlign: 'center', color: s.isAbsent ? '#C58CB5' : '#ff9999', fontSize: '0.85rem' }}>
-                                                {s.isAbsent ? 'Candidate Absent' : (passThreshold - s.mark > 0 ? `${passThreshold - s.mark} mark(s) short` : 'Subject Failed')}
+                                            <td style={{ textAlign: 'center', color: '#ff9999', fontSize: '0.85rem' }}>
+                                                {passThreshold - s.mark > 0 ? `${passThreshold - s.mark} mark(s) short` : 'Subject Failed'}
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                                 <span style={{ 
@@ -272,10 +300,59 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                                                     borderRadius: '12px', 
                                                     fontSize: '0.7rem', 
                                                     fontWeight: 700,
-                                                    background: s.isAbsent ? 'rgba(197, 140, 181, 0.22)' : 'rgba(220, 53, 69, 0.2)',
-                                                    color: s.isAbsent ? '#C58CB5' : '#dc3545'
+                                                    background: 'rgba(220, 53, 69, 0.2)',
+                                                    color: '#dc3545'
                                                 }}>
-                                                    {s.isAbsent ? 'ABSENT' : 'FAILED'}
+                                                    FAILED
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )
+                    )}
+
+                    {activeTab === 'absent' && (
+                        absentStudents.length === 0 ? (
+                            <div style={{ padding: '3rem', textAlign: 'center', color: '#28a745' }}>
+                                <CheckCircle size={48} style={{ marginBottom: '1rem' }} />
+                                <h3>Full Attendance!</h3>
+                                <p style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.5rem' }}>No student was absent for this subject.</p>
+                            </div>
+                        ) : (
+                            <table style={{ margin: 0, width: '100%', borderSpacing: 0 }}>
+                                <thead>
+                                    <tr>
+                                        <th>USN</th>
+                                        <th>Student Name</th>
+                                        <th style={{ textAlign: 'center' }}>Exam Status</th>
+                                        <th style={{ textAlign: 'center' }}>Remarks</th>
+                                        <th style={{ textAlign: 'center' }}>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {absentStudents.map((s) => (
+                                        <tr key={s.usn}>
+                                            <td className="nowrap" style={{ fontSize: '0.85rem', color: '#C58CB5', fontWeight: 600 }}>{s.usn}</td>
+                                            <td className="nowrap" style={{ fontWeight: 600 }}>{s.name}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 800, color: '#C58CB5', fontSize: '1.1rem' }}>
+                                                AB
+                                            </td>
+                                            <td style={{ textAlign: 'center', color: '#C58CB5', fontSize: '0.85rem' }}>
+                                                Candidate Absent from Exam
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span style={{ 
+                                                    padding: '4px 10px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '0.7rem', 
+                                                    fontWeight: 700,
+                                                    background: 'rgba(197, 140, 181, 0.22)',
+                                                    color: '#C58CB5',
+                                                    border: '1px solid rgba(197, 140, 181, 0.4)'
+                                                }}>
+                                                    ABSENT
                                                 </span>
                                             </td>
                                         </tr>

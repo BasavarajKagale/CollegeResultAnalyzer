@@ -234,10 +234,17 @@ const ResultDetails = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.2rem' }}>
                     {result.subjects.map((sub: any) => {
                         const subStat = computedSubStatsMap[sub.name] || sub;
-                        const passPct = Number(subStat.passPercentage !== undefined ? subStat.passPercentage : sub.passPercentage);
-                        const failPct = (100 - passPct).toFixed(1);
                         const passCount = subStat.totalPassCount !== undefined ? subStat.totalPassCount : (sub.totalPassCount || sub.passCount || 0);
                         const failCount = subStat.failCount !== undefined ? subStat.failCount : (sub.failCount || 0);
+                        const abCount = subStat.abCount !== undefined ? subStat.abCount : (sub.abCount || 0);
+                        const whCount = subStat.withHeldCount !== undefined ? subStat.withHeldCount : (sub.withHeldCount || 0);
+                        const appeared = subStat.appearedCount !== undefined ? subStat.appearedCount : (sub.appearedCount || students.length || 0);
+                        const evaluatedCount = Math.max(1, appeared - whCount);
+
+                        const passPct = (passCount / evaluatedCount) * 100;
+                        const failPct = (failCount / evaluatedCount) * 100;
+                        const abPct = (abCount / evaluatedCount) * 100;
+
                         return (
                             <div 
                                 key={sub.name}
@@ -256,19 +263,32 @@ const ResultDetails = () => {
                                     <ExternalLink size={16} style={{ color: '#888', flexShrink: 0 }} />
                                 </div>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8rem' }}>
-                                    <span style={{ color: '#28a745', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                    <span style={{ color: '#28a745', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
                                         <CheckCircle2 size={12} /> Pass: {passPct.toFixed(1)}% ({passCount})
                                     </span>
-                                    <span style={{ color: '#dc3545', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                        <AlertTriangle size={12} /> Fail: {failPct}% ({failCount})
-                                    </span>
+                                    {failCount > 0 && (
+                                        <span style={{ color: '#dc3545', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+                                            <AlertTriangle size={12} /> Fail: {failPct.toFixed(1)}% ({failCount})
+                                        </span>
+                                    )}
+                                    {abCount > 0 && (
+                                        <span style={{ color: '#C58CB5', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+                                            <AlertTriangle size={12} /> AB: {abPct.toFixed(1)}% ({abCount})
+                                        </span>
+                                    )}
+                                    {failCount === 0 && abCount === 0 && (
+                                        <span style={{ color: '#aaa', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                            Fail: 0.0% (0)
+                                        </span>
+                                    )}
                                 </div>
 
-                                {/* Dual Progress Bar */}
-                                <div style={{ height: '6px', background: 'rgba(220, 53, 69, 0.3)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
-                                    <div style={{ width: `${passPct}%`, height: '100%', background: '#28a745' }} />
-                                    <div style={{ width: `${100 - passPct}%`, height: '100%', background: '#dc3545' }} />
+                                {/* Multi-Segment Progress Bar */}
+                                <div style={{ height: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+                                    <div style={{ width: `${passPct}%`, height: '100%', background: '#28a745' }} title={`Pass: ${passPct.toFixed(1)}%`} />
+                                    {failPct > 0 && <div style={{ width: `${failPct}%`, height: '100%', background: '#dc3545' }} title={`Fail: ${failPct.toFixed(1)}%`} />}
+                                    {abPct > 0 && <div style={{ width: `${abPct}%`, height: '100%', background: '#C58CB5' }} title={`Absent: ${abPct.toFixed(1)}%`} />}
                                 </div>
 
                                 <div style={{ marginTop: '0.8rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#aaa' }}>

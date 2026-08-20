@@ -403,21 +403,27 @@ const Dashboard = () => {
                             const passedCount = sub.totalPassCount ?? sub.passCount ?? Math.max(0, (sub.appearedCount || students.length || 0) - (sub.failCount || 0));
                             const abCount = sub.abCount || 0;
                             const examFailCount = Math.max(0, (sub.failCount || 0) - subWithheldCount);
-                            const totalFailCount = examFailCount + abCount;
-                            const evaluatedSubCount = Math.max(0, (sub.appearedCount || students.length || 0) - subWithheldCount);
-                            const subPassPct = evaluatedSubCount > 0 ? ((passedCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
-                            const subFailPct = evaluatedSubCount > 0 ? ((totalFailCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
+                            const evaluatedSubCount = Math.max(1, (sub.appearedCount || students.length || 0) - subWithheldCount);
+                            const subPassPct = ((passedCount / evaluatedSubCount) * 100).toFixed(1);
+                            const subFailPct = ((examFailCount / evaluatedSubCount) * 100).toFixed(1);
+                            const subAbPct = ((abCount / evaluatedSubCount) * 100).toFixed(1);
 
                             const subLabels = [`Passed (${passedCount})`];
                             const subData = [passedCount];
                             const subBg = ['#28a745'];
                             const subBorder = ['#1e7e34'];
 
-                            if (totalFailCount > 0) {
-                                subLabels.push(`Failed (${totalFailCount})`);
-                                subData.push(totalFailCount);
+                            if (examFailCount > 0) {
+                                subLabels.push(`Failed (${examFailCount})`);
+                                subData.push(examFailCount);
                                 subBg.push('#dc3545');
                                 subBorder.push('#bd2130');
+                            }
+                            if (abCount > 0) {
+                                subLabels.push(`Absent (${abCount})`);
+                                subData.push(abCount);
+                                subBg.push('#C58CB5');
+                                subBorder.push('#9B59B6');
                             }
                             if (subWithheldCount > 0) {
                                 subLabels.push(`Withheld (${subWithheldCount})`);
@@ -472,9 +478,21 @@ const Dashboard = () => {
                                         <span style={{ color: '#28a745', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                             <CheckCircle size={12} /> {subPassPct}% Pass
                                         </span>
-                                        <span style={{ color: '#dc3545', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                            <AlertTriangle size={12} /> {subFailPct}% Fail
-                                        </span>
+                                        {examFailCount > 0 && (
+                                            <span style={{ color: '#dc3545', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                <AlertTriangle size={12} /> {subFailPct}% Fail
+                                            </span>
+                                        )}
+                                        {abCount > 0 && (
+                                            <span style={{ color: '#C58CB5', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                <AlertTriangle size={12} /> {subAbPct}% AB ({abCount})
+                                            </span>
+                                        )}
+                                        {examFailCount === 0 && abCount === 0 && (
+                                            <span style={{ color: '#aaa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                0.0% Fail
+                                            </span>
+                                        )}
                                         {subWithheldCount > 0 && (
                                             <span style={{ color: '#7CBCE8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                                 <AlertTriangle size={12} /> {subWithheldCount} WH
