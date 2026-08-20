@@ -273,22 +273,21 @@ const ResultDetails = () => {
                                         </span>
                                     )}
                                     {abCount > 0 && (
-                                        <span style={{ color: '#C58CB5', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+                                        <span style={{ color: '#dc3545', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
                                             <AlertTriangle size={12} /> AB: {abPct.toFixed(1)}% ({abCount})
                                         </span>
                                     )}
                                     {failCount === 0 && abCount === 0 && (
-                                        <span style={{ color: '#aaa', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                            Fail: 0.0% (0)
+                                        <span style={{ color: '#dc3545', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+                                            <AlertTriangle size={12} /> Fail: 0.0% (0)
                                         </span>
                                     )}
                                 </div>
 
-                                {/* Multi-Segment Progress Bar */}
-                                <div style={{ height: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+                                {/* Dual Progress Bar */}
+                                <div style={{ height: '6px', background: 'rgba(220, 53, 69, 0.25)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
                                     <div style={{ width: `${passPct}%`, height: '100%', background: '#28a745' }} title={`Pass: ${passPct.toFixed(1)}%`} />
-                                    {failPct > 0 && <div style={{ width: `${failPct}%`, height: '100%', background: '#dc3545' }} title={`Fail: ${failPct.toFixed(1)}%`} />}
-                                    {abPct > 0 && <div style={{ width: `${abPct}%`, height: '100%', background: '#C58CB5' }} title={`Absent: ${abPct.toFixed(1)}%`} />}
+                                    <div style={{ width: `${100 - passPct}%`, height: '100%', background: '#dc3545' }} title={`Fail/AB: ${(100 - passPct).toFixed(1)}%`} />
                                 </div>
 
                                 <div style={{ marginTop: '0.8rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#aaa' }}>

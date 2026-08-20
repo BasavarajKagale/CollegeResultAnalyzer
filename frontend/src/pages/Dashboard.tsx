@@ -484,13 +484,13 @@ const Dashboard = () => {
                                             </span>
                                         )}
                                         {abCount > 0 && (
-                                            <span style={{ color: '#C58CB5', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                            <span style={{ color: '#dc3545', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                                 <AlertTriangle size={12} /> {subAbPct}% AB ({abCount})
                                             </span>
                                         )}
                                         {examFailCount === 0 && abCount === 0 && (
-                                            <span style={{ color: '#aaa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                0.0% Fail
+                                            <span style={{ color: '#dc3545', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                <AlertTriangle size={12} /> 0.0% Fail
                                             </span>
                                         )}
                                         {subWithheldCount > 0 && (
