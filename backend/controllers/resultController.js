@@ -414,6 +414,7 @@ const exportExcel = async (req, res) => {
 
                 if (isAbsent) {
                     ab++;
+                    appeared++;
                 } else if (isWithHeld) {
                     withHeld++;
                     appeared++;

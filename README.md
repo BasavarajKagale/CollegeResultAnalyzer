@@ -59,12 +59,14 @@ The **College Result Analyzer** is a full-stack web application designed to simp
 
 The platform enforces standardized academic evaluation criteria:
 
-### 1. Subject-Wise Passing Criteria
+### 1. Subject-Wise Passing Criteria & Absent Handling
 - **Pass Threshold:** Minimum Total Marks $\ge 35$ (for 100-mark subjects) or $\ge 70$ (for 200-mark subjects / Internship).
-- **Withheld Handling:** Withheld candidates ($\text{W}$ / $\text{WH}$) are excluded from both Pass and Fail counts and excluded from the passing percentage denominator:
-  $$\text{Evaluated Subject Candidates} = \text{Appeared Count} - \text{Withheld Count}$$
+- **Absent Candidates ($\text{AB}$ / $\text{A}$):** Absent candidates are considered **failed** and are included in both subject fail rate and overall fail percentage.
+- **Withheld Candidates ($\text{W}$ / $\text{WH}$):** Withheld candidates are excluded from both Pass and Fail counts and excluded from the percentage denominator:
+  $$\text{Evaluated Subject Candidates} = \text{Total Registered} - \text{Withheld Count}$$
+  $$\text{Subject Fail Count} = \text{Exam Fail Count} + \text{Absent (AB) Count}$$
+  $$\text{Subject Fail Percentage / Rate (\%)} = \frac{\text{Subject Fail Count (incl. AB)}}{\text{Evaluated Subject Candidates}} \times 100$$
   $$\text{Subject Passing Percentage (\%)} = \frac{\text{Subject Pass Count}}{\text{Evaluated Subject Candidates}} \times 100$$
-  $$\text{Subject Fail Percentage (\%)} = \frac{\text{Subject Fail Count}}{\text{Evaluated Subject Candidates}} \times 100$$
 
 ### 2. Subject Score Classifications
 | Category | 100-Mark Subject | 200-Mark Subject |

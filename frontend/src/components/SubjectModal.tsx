@@ -50,6 +50,7 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
     const fcdThreshold = is200 ? 140 : 70;
     const fcThreshold = is200 ? 120 : 60;
     const scThreshold = is200 ? 100 : 50;
+    const passThreshold = is200 ? 70 : 35;
 
     // Sort by subject mark descending
     const sortedStudents = [...subjectStudents].sort((a, b) => b.mark - a.mark);
@@ -260,10 +261,10 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                                             <td className="nowrap" style={{ fontSize: '0.85rem', color: s.isAbsent ? '#C58CB5' : '#dc3545', fontWeight: 600 }}>{s.usn}</td>
                                             <td className="nowrap" style={{ fontWeight: 600 }}>{s.name}</td>
                                             <td style={{ textAlign: 'center', fontWeight: 800, color: s.isAbsent ? '#C58CB5' : '#ff4d4d', fontSize: '1.1rem' }}>
-                                                {s.isAbsent ? 'AB' : `${s.mark} / 100`}
+                                                {s.isAbsent ? 'AB' : `${s.mark} / ${is200 ? 200 : 100}`}
                                             </td>
                                             <td style={{ textAlign: 'center', color: s.isAbsent ? '#C58CB5' : '#ff9999', fontSize: '0.85rem' }}>
-                                                {s.isAbsent ? 'Candidate Absent' : (35 - s.mark > 0 ? `${35 - s.mark} mark(s) short` : 'Subject Failed')}
+                                                {s.isAbsent ? 'Candidate Absent' : (passThreshold - s.mark > 0 ? `${passThreshold - s.mark} mark(s) short` : 'Subject Failed')}
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                                 <span style={{ 

@@ -468,6 +468,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
 
             if (isAbsent) {
                 stat.abCount++;
+                stat.appearedCount++;
                 failedSubjectsCount++;
             } else if (isWithHeld) {
                 stat.withHeldCount++;

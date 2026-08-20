@@ -172,6 +172,7 @@ async function generateResultPDF(result, students, res) {
 
             if (isAbsent) {
                 ab++;
+                appeared++;
             } else if (isWithHeld) {
                 withHeld++;
                 appeared++;

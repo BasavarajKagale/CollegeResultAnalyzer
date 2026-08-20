@@ -178,8 +178,8 @@ const Dashboard = () => {
                 borderRadius: 6,
             },
             {
-                label: 'Failed Candidates',
-                data: result.subjects.map((s: any) => Math.max(0, (s.failCount || 0) - (s.withHeldCount || 0))),
+                label: 'Failed Candidates (incl. AB)',
+                data: result.subjects.map((s: any) => (s.failCount || 0) + (s.abCount || 0)),
                 backgroundColor: 'rgba(220, 53, 69, 0.75)',
                 borderColor: '#dc3545',
                 borderWidth: 1.5,
@@ -401,19 +401,21 @@ const Dashboard = () => {
                         {result.subjects.map((sub: any) => {
                             const subWithheldCount = sub.withHeldCount || 0;
                             const passedCount = sub.totalPassCount ?? sub.passCount ?? Math.max(0, (sub.appearedCount || students.length || 0) - (sub.failCount || 0));
-                            const failedCount = Math.max(0, (sub.failCount || 0) - subWithheldCount);
+                            const abCount = sub.abCount || 0;
+                            const examFailCount = Math.max(0, (sub.failCount || 0) - subWithheldCount);
+                            const totalFailCount = examFailCount + abCount;
                             const evaluatedSubCount = Math.max(0, (sub.appearedCount || students.length || 0) - subWithheldCount);
                             const subPassPct = evaluatedSubCount > 0 ? ((passedCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
-                            const subFailPct = evaluatedSubCount > 0 ? ((failedCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
+                            const subFailPct = evaluatedSubCount > 0 ? ((totalFailCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
 
                             const subLabels = [`Passed (${passedCount})`];
                             const subData = [passedCount];
                             const subBg = ['#28a745'];
                             const subBorder = ['#1e7e34'];
 
-                            if (failedCount > 0) {
-                                subLabels.push(`Failed (${failedCount})`);
-                                subData.push(failedCount);
+                            if (totalFailCount > 0) {
+                                subLabels.push(`Failed (${totalFailCount})`);
+                                subData.push(totalFailCount);
                                 subBg.push('#dc3545');
                                 subBorder.push('#bd2130');
                             }

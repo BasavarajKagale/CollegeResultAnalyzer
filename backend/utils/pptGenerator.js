@@ -473,6 +473,7 @@ function formatSlide1CollegeTitle(rawName) {
 
             if (isAbsent) {
                 ab++;
+                appeared++;
             } else if (isWithHeld) {
                 withHeld++;
                 appeared++;
