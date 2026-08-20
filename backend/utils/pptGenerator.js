@@ -157,21 +157,23 @@ async function generateResultPPT(result, students, res) {
     };
 
     const subjects = result.subjects || [];
+    const withHeldCount = stats.withHeldCount || (students || []).filter(s => s.remark === 'WITHHELD').length || 0;
     const totalStudents = stats.appearedCount || stats.totalStudents || students.length || 0;
+    const evaluatedStudents = Math.max(1, totalStudents - withHeldCount);
     const fcdCount = stats.fcdCount || 0;
     const fcCount = stats.fcCount || 0;
     const scCount = stats.scCount || 0;
     const passCount = stats.passClassCount || 0;
     const failCount = stats.failCount || 0;
-    const totalPass = stats.passCount || (totalStudents - failCount);
-    const overallPassPct = stats.passPercentage || (totalStudents > 0 ? (totalPass / totalStudents) * 100 : 0);
+    const totalPass = stats.passCount || 0;
+    const overallPassPct = stats.passPercentage !== undefined ? stats.passPercentage : (evaluatedStudents > 0 ? (totalPass / evaluatedStudents) * 100 : 0);
 
-    const fcdPct = totalStudents > 0 ? ((fcdCount / totalStudents) * 100).toFixed(2) : '0.00';
-    const fcPct = totalStudents > 0 ? ((fcCount / totalStudents) * 100).toFixed(2) : '0.00';
-    const scPct = totalStudents > 0 ? ((scCount / totalStudents) * 100).toFixed(2) : '0.00';
-    const passClassPct = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(2) : '0.00';
-    const failPct = totalStudents > 0 ? ((failCount / totalStudents) * 100).toFixed(2) : '0.00';
-    const passPct = overallPassPct.toFixed(2);
+    const fcdPct = evaluatedStudents > 0 ? ((fcdCount / evaluatedStudents) * 100).toFixed(2) : '0.00';
+    const fcPct = evaluatedStudents > 0 ? ((fcCount / evaluatedStudents) * 100).toFixed(2) : '0.00';
+    const scPct = evaluatedStudents > 0 ? ((scCount / evaluatedStudents) * 100).toFixed(2) : '0.00';
+    const passClassPct = evaluatedStudents > 0 ? ((passCount / evaluatedStudents) * 100).toFixed(2) : '0.00';
+    const failPct = evaluatedStudents > 0 ? ((failCount / evaluatedStudents) * 100).toFixed(2) : '0.00';
+    const passPct = Number(overallPassPct).toFixed(2);
 
 function formatSlide1CollegeTitle(rawName) {
     if (!rawName) return "KLE College of Engg. & Technology,\nChikodi \u2013 591 201";
@@ -449,7 +451,7 @@ function formatSlide1CollegeTitle(rawName) {
         color: "000000"
     });
 
-    // Compute live subject stats (strictly FCD: >=70, FC: 60-69, SC: 36-59, Pass: ===35, Fail: <35)
+    // Compute live subject stats (strictly FCD: >=70%, FC: 60-69%, SC: 50-59%, Pass: 35-49%, Fail: <35% or <70)
     const computedSubStats = subjects.map(sub => {
         const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || (students || []).some(st => {
             const m = Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0;
@@ -458,7 +460,7 @@ function formatSlide1CollegeTitle(rawName) {
         const passThreshold = is200 ? 70 : 35;
         const fcdThreshold = is200 ? 140 : 70;
         const fcThreshold = is200 ? 120 : 60;
-        const scThreshold = is200 ? 70 : 35;
+        const scThreshold = is200 ? 100 : 50;
 
         let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
         students.forEach(st => {
@@ -482,16 +484,17 @@ function formatSlide1CollegeTitle(rawName) {
                     fcd++;
                 } else if (mark >= fcThreshold) {
                     fc++;
-                } else if (mark > scThreshold) {
+                } else if (mark >= scThreshold) {
                     sc++;
-                } else if (mark === passThreshold) {
-                    passClass++; // Strictly pass threshold
+                } else {
+                    passClass++;
                 }
             }
         });
 
         const totPass = fcd + fc + sc + passClass;
-        const pct = appeared > 0 ? (totPass / appeared) * 100 : 0;
+        const evaluatedAppeared = Math.max(0, appeared - withHeld);
+        const pct = evaluatedAppeared > 0 ? (totPass / evaluatedAppeared) * 100 : 0;
 
         return {
             name: sub.name,

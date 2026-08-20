@@ -61,7 +61,7 @@ const ResultDetails = () => {
             const passThreshold = is200 ? 70 : 35;
             const fcdThreshold = is200 ? 140 : 70;
             const fcThreshold = is200 ? 120 : 60;
-            const scThreshold = is200 ? 70 : 35;
+            const scThreshold = is200 ? 100 : 50;
 
             let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
             students.forEach((st: any) => {
@@ -85,16 +85,17 @@ const ResultDetails = () => {
                         fcd++;
                     } else if (mark >= fcThreshold) {
                         fc++;
-                    } else if (mark > scThreshold) {
+                    } else if (mark >= scThreshold) {
                         sc++;
-                    } else if (mark === passThreshold) {
-                        passClass++; // Strictly pass threshold
+                    } else {
+                        passClass++;
                     }
                 }
             });
 
             const totPass = fcd + fc + sc + passClass;
-            const pct = appeared > 0 ? (totPass / appeared) * 100 : 0;
+            const evaluatedCount = Math.max(0, appeared - withHeld);
+            const pct = evaluatedCount > 0 ? (totPass / evaluatedCount) * 100 : 0;
 
             map[sub.name] = {
                 appearedCount: appeared,
@@ -311,7 +312,9 @@ const ResultDetails = () => {
                                     const d = s.subjectDetails?.[sub.name] || {};
                                     const r = (d.result || '').toUpperCase();
                                     const isWH = d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(r);
-                                    return !isWH && (r === 'AB' || r === 'A' || r === 'F' || r === 'FAIL' || m < 35);
+                                    const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some((st: any) => (Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0) > 100);
+                                    const passThreshold = is200 ? 70 : 35;
+                                    return !isWH && (r === 'AB' || r === 'A' || r === 'F' || r === 'FAIL' || m < passThreshold);
                                 }).length;
 
                                 const isPassStudent = s.isPass && !isWithHeldStudent;
@@ -330,6 +333,8 @@ const ResultDetails = () => {
                                             const inStr = String(det.in ?? '').trim().toUpperCase();
                                             const inVal = typeof det.in === 'number' ? det.in : (Number(det.in) || 0);
                                             const exVal = typeof det.ex === 'number' ? det.ex : (Number(det.ex) || 0);
+                                            const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some((st: any) => (Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0) > 100);
+                                            const passThreshold = is200 ? 70 : 35;
 
                                             const isWithHeld = det.isWithHeld || resUpper === 'W' || resUpper === 'WH' || resUpper === 'WITH HELD' || resUpper === 'WITHHELD';
                                             const isAbsent = !isWithHeld && (det.isAbsent || resUpper === 'AB' || resUpper === 'ABSENT' || resUpper === 'A' || inStr === 'A' || inStr === 'AB');
@@ -342,19 +347,19 @@ const ResultDetails = () => {
                                             } else if (isAbsent) {
                                                 isSubFail = true;
                                                 reasonTag = '(AB)';
-                                            } else if (resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
+                                            } else if (resUpper === 'F' || resUpper === 'FAIL' || markVal < passThreshold) {
                                                 isSubFail = true;
-                                                if (det.in !== undefined && inVal > 0 && inVal < 18) {
+                                                if (det.in !== undefined && inVal > 0 && inVal < (is200 ? 36 : 18)) {
                                                     reasonTag = '(IN)';
-                                                } else if (det.ex !== undefined && exVal < 18) {
+                                                } else if (det.ex !== undefined && exVal < (is200 ? 36 : 18)) {
                                                     reasonTag = '(EX)';
                                                 } else {
                                                     reasonTag = '(EX)';
                                                 }
-                                            } else if ((det.in !== undefined && inVal > 0 && inVal < 18) || (det.ex !== undefined && exVal > 0 && exVal < 18)) {
-                                                if (resUpper === 'F' || resUpper === 'FAIL' || markVal < 35) {
+                                            } else if ((det.in !== undefined && inVal > 0 && inVal < (is200 ? 36 : 18)) || (det.ex !== undefined && exVal > 0 && exVal < (is200 ? 36 : 18))) {
+                                                if (resUpper === 'F' || resUpper === 'FAIL' || markVal < passThreshold) {
                                                     isSubFail = true;
-                                                    reasonTag = (det.in !== undefined && inVal > 0 && inVal < 18) ? '(IN)' : '(EX)';
+                                                    reasonTag = (det.in !== undefined && inVal > 0 && inVal < (is200 ? 36 : 18)) ? '(IN)' : '(EX)';
                                                 }
                                             }
 

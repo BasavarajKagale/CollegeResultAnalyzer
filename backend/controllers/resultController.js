@@ -271,7 +271,9 @@ const exportExcel = async (req, res) => {
                 const resUpper = (det.result || '').toUpperCase();
                 const isWH = det.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(resUpper);
                 const markVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
-                if (!isWH && (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'A' || resUpper === 'AB' || markVal < 35)) {
+                const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some(st => (Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0) > 100);
+                const passThreshold = is200 ? 70 : 35;
+                if (!isWH && (resUpper === 'F' || resUpper === 'FAIL' || resUpper === 'A' || resUpper === 'AB' || markVal < passThreshold)) {
                     pureFailedCount++;
                 }
             });
@@ -320,15 +322,17 @@ const exportExcel = async (req, res) => {
                     const totalVal = s.marks && s.marks[sub.name] !== undefined ? s.marks[sub.name] : (det.total || 0);
                     const inVal = typeof det.in === 'number' ? det.in : 0;
                     const exVal = typeof det.ex === 'number' ? det.ex : 0;
+                    const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some(st => (Number(st.marks?.[sub.name]) || Number(st.subjectDetails?.[sub.name]?.total) || 0) > 100);
+                    const passThreshold = is200 ? 70 : 35;
                     let resVal = (det.result || '').toUpperCase();
                     if (!resVal) {
-                        resVal = totalVal >= 35 ? 'P' : 'F';
+                        resVal = totalVal >= passThreshold ? 'P' : 'F';
                     }
 
                     const isResFail = resVal === 'F' || resVal === 'FAIL';
-                    const isTotalFail = totalVal < 35 || isResFail;
-                    const isInFail = inVal > 0 && inVal < 18 && isTotalFail;
-                    const isExFail = exVal > 0 && exVal < 18 && isTotalFail;
+                    const isTotalFail = totalVal < passThreshold || isResFail;
+                    const isInFail = inVal > 0 && inVal < (is200 ? 36 : 18) && isTotalFail;
+                    const isExFail = exVal > 0 && exVal < (is200 ? 36 : 18) && isTotalFail;
 
                     const lightRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                     const darkRedFont = { color: { argb: 'FF991B1B' }, bold: true };
@@ -387,7 +391,7 @@ const exportExcel = async (req, res) => {
         sheet.mergeCells(matrixTitleRow.number, 1, matrixTitleRow.number, totalSheetCols);
         sheet.getRow(matrixTitleRow.number).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
 
-        // Dynamically calculate live subject statistics (Strictly: FCD>=70%, FC: 60-69%, SC: 36-59%, Pass: ===35%, Fail: <35%)
+        // Dynamically calculate live subject statistics (Strictly: FCD>=70%, FC: 60-69%, SC: 50-59%, Pass: 35-49%, Fail: <35% or <70)
         const computedSubStatsMap = {};
         subjects.forEach(sub => {
             const is200 = /BINT803|INTERNSHIP/i.test(sub.name || '') || students.some(st => {
@@ -397,7 +401,7 @@ const exportExcel = async (req, res) => {
             const passThreshold = is200 ? 70 : 35;
             const fcdThreshold = is200 ? 140 : 70;
             const fcThreshold = is200 ? 120 : 60;
-            const scThreshold = is200 ? 70 : 35;
+            const scThreshold = is200 ? 100 : 50;
 
             let appeared = 0, fcd = 0, fc = 0, sc = 0, passClass = 0, fail = 0, ab = 0, withHeld = 0;
             students.forEach(st => {
@@ -421,16 +425,17 @@ const exportExcel = async (req, res) => {
                         fcd++;
                     } else if (mark >= fcThreshold) {
                         fc++;
-                    } else if (mark > scThreshold) {
+                    } else if (mark >= scThreshold) {
                         sc++;
-                    } else if (mark === passThreshold) {
-                        passClass++; // Strictly pass threshold
+                    } else {
+                        passClass++;
                     }
                 }
             });
 
             const totPass = fcd + fc + sc + passClass;
-            const pct = appeared > 0 ? (totPass / appeared) * 100 : 0;
+            const evaluatedSubCount = Math.max(0, appeared - withHeld);
+            const pct = evaluatedSubCount > 0 ? (totPass / evaluatedSubCount) * 100 : 0;
 
             computedSubStatsMap[sub.name] = {
                 appearedCount: appeared,
@@ -561,13 +566,14 @@ const exportExcel = async (req, res) => {
         p1Counts.font = { bold: false };
         p1Counts.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        const tot = stats.totalStudents || 1;
+        const withHeldTot = stats.withHeldCount || (students || []).filter(s => s.remark === 'WITHHELD').length || 0;
+        const evalTot = Math.max(1, (stats.totalStudents || students.length || 0) - withHeldTot);
         const p1Pcts = sheet.addRow([
             '',
-            `${((stats.fcdCount / tot) * 100).toFixed(2)}%`,
-            `${((stats.fcCount / tot) * 100).toFixed(2)}%`,
-            `${((stats.scCount / tot) * 100).toFixed(2)}%`,
-            `${((stats.failCount / tot) * 100).toFixed(2)}%`,
+            `${((stats.fcdCount / evalTot) * 100).toFixed(2)}%`,
+            `${((stats.fcCount / evalTot) * 100).toFixed(2)}%`,
+            `${((stats.scCount / evalTot) * 100).toFixed(2)}%`,
+            `${((stats.failCount / evalTot) * 100).toFixed(2)}%`,
             `${(stats.passPercentage || 0).toFixed(2)}%`
         ]);
         p1Pcts.font = { bold: true, color: { argb: 'FF2563EB' } };
@@ -665,7 +671,7 @@ const exportExcel = async (req, res) => {
                     labels: ['Appeared', 'FCD', 'FC', 'SC', 'Total Fail', 'Total Pass'],
                     datasets: [
                         { label: 'Count', backgroundColor: '#3B82F6', data: [stats.totalStudents || 0, stats.fcdCount || 0, stats.fcCount || 0, stats.scCount || 0, stats.failCount || 0, stats.passCount || 0] },
-                        { label: 'Percentage (%)', backgroundColor: '#B91C1C', data: [null, parseFloat(((stats.fcdCount / tot) * 100).toFixed(2)), parseFloat(((stats.fcCount / tot) * 100).toFixed(2)), parseFloat(((stats.scCount / tot) * 100).toFixed(2)), parseFloat(((stats.failCount / tot) * 100).toFixed(2)), parseFloat((stats.passPercentage || 0).toFixed(2))] }
+                        { label: 'Percentage (%)', backgroundColor: '#B91C1C', data: [null, parseFloat(((stats.fcdCount / evalTot) * 100).toFixed(2)), parseFloat(((stats.fcCount / evalTot) * 100).toFixed(2)), parseFloat(((stats.scCount / evalTot) * 100).toFixed(2)), parseFloat(((stats.failCount / evalTot) * 100).toFixed(2)), parseFloat((stats.passPercentage || 0).toFixed(2))] }
                     ]
                 },
                 options: {

@@ -60,26 +60,32 @@ The **College Result Analyzer** is a full-stack web application designed to simp
 The platform enforces standardized academic evaluation criteria:
 
 ### 1. Subject-Wise Passing Criteria
-- **Pass Threshold:** Minimum Total Marks $\ge 35$.
-- **Appeared vs. Absent:** Candidates marked Absent ($\text{AB}$ / $\text{A}$) are excluded from the appeared count:
-  $$\text{Appeared Count} = \text{Total Registered} - \text{Absent (AB)}$$
-  $$\text{Passing Percentage (\%)} = \frac{\text{Total Pass}}{\text{Appeared Count}} \times 100$$
+- **Pass Threshold:** Minimum Total Marks $\ge 35$ (for 100-mark subjects) or $\ge 70$ (for 200-mark subjects / Internship).
+- **Withheld Handling:** Withheld candidates ($\text{W}$ / $\text{WH}$) are excluded from both Pass and Fail counts and excluded from the passing percentage denominator:
+  $$\text{Evaluated Subject Candidates} = \text{Appeared Count} - \text{Withheld Count}$$
+  $$\text{Subject Passing Percentage (\%)} = \frac{\text{Subject Pass Count}}{\text{Evaluated Subject Candidates}} \times 100$$
+  $$\text{Subject Fail Percentage (\%)} = \frac{\text{Subject Fail Count}}{\text{Evaluated Subject Candidates}} \times 100$$
 
 ### 2. Subject Score Classifications
-| Category | Condition (Total Marks $T$) |
-| :--- | :--- |
-| **Distinction (FCD)** | $\text{Total} \ge 70$ |
-| **First Class (FC)** | $60 \le \text{Total} < 70$ |
-| **Second Class (SC)** | $36 \le \text{Total} < 60$ |
-| **Pass (Just Pass)** | $\text{Total} = 35$ strictly |
-| **Fail** | $\text{Total} < 35$ (or Absent $\text{AB}$) |
+| Category | 100-Mark Subject | 200-Mark Subject |
+| :--- | :--- | :--- |
+| **Distinction (FCD)** | $\text{Total} \ge 70$ | $\text{Total} \ge 140$ |
+| **First Class (FC)** | $60 \le \text{Total} < 70$ | $120 \le \text{Total} < 140$ |
+| **Second Class (SC)** | $50 \le \text{Total} < 60$ | $100 \le \text{Total} < 120$ |
+| **Pass Class** | $35 \le \text{Total} < 50$ | $70 \le \text{Total} < 100$ |
+| **Fail** | $\text{Total} < 35$ (or Absent $\text{AB}$) | $\text{Total} < 70$ (or Absent $\text{AB}$) |
+| **Withheld** | University Withheld ($\text{WH}$) | University Withheld ($\text{WH}$) |
 
-### 3. Overall Batch Classifications
-- **First Class with Distinction (FCD):** $\ge 70.0\%$
-- **First Class (FC):** $60.0\% - 69.99\%$
-- **Second Class (SC):** $50.0\% - 59.99\%$
-- **Pass Class:** $35.0\% - 49.99\%$
-- **Fail:** Failed in $\ge 1$ subject or overall percentage $< 35\%$
+### 3. Overall Batch Classifications (Total Percentage)
+- **First Class with Distinction (FCD):** $\ge 70.0\%$ and $\le 100.0\%$ (all subjects passed)
+- **First Class (FC):** $60.0\% \le \text{Percentage} < 70.0\%$ (all subjects passed)
+- **Second Class (SC):** $50.0\% \le \text{Percentage} < 60.0\%$ (all subjects passed)
+- **Pass Class:** $35.0\% \le \text{Percentage} < 50.0\%$ (all subjects passed)
+- **Fail:** Failed in $\ge 1$ subject or overall percentage $< 35.0\%$
+- **Withheld:** Candidates with any withheld subject result are classified as `WITHHELD` (not counted in pass or fail counts).
+- **Overall Passing Percentage:**
+  $$\text{Overall Passing Percentage (\%)} = \frac{\text{Overall Pass Count}}{\text{Total Students} - \text{Withheld Students}} \times 100$$
+  $$\text{Overall Fail Percentage (\%)} = \frac{\text{Overall Fail Count}}{\text{Total Students} - \text{Withheld Students}} \times 100$$
 
 ---
 

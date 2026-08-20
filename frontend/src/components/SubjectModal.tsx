@@ -43,6 +43,14 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
         };
     });
 
+    const is200 = /BINT803|INTERNSHIP/i.test(subjectName || '') || students.some(st => {
+        const m = Number(st.marks?.[subjectName]) || Number(st.subjectDetails?.[subjectName]?.total) || 0;
+        return m > 100;
+    });
+    const fcdThreshold = is200 ? 140 : 70;
+    const fcThreshold = is200 ? 120 : 60;
+    const scThreshold = is200 ? 100 : 50;
+
     // Sort by subject mark descending
     const sortedStudents = [...subjectStudents].sort((a, b) => b.mark - a.mark);
     sortedStudents.forEach((s, idx) => s.subjectRank = idx + 1);
@@ -54,14 +62,14 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
     const passCount = passedStudents.length;
     const withheldCount = withheldStudents.length;
     const failCount = failedStudents.length;
-    const totalCount = students.length || 1;
+    const evaluatedCount = Math.max(0, students.length - withheldCount);
 
-    const passPercentage = ((passCount / totalCount) * 100).toFixed(1);
-    const failPercentage = ((failCount / totalCount) * 100).toFixed(1);
+    const passPercentage = evaluatedCount > 0 ? ((passCount / evaluatedCount) * 100).toFixed(1) : '0.0';
+    const failPercentage = evaluatedCount > 0 ? ((failCount / evaluatedCount) * 100).toFixed(1) : '0.0';
 
     const highestMark = sortedStudents[0]?.mark || 0;
     const lowestMark = sortedStudents[sortedStudents.length - 1]?.mark || 0;
-    const avgMark = (subjectStudents.reduce((acc, s) => acc + s.mark, 0) / totalCount).toFixed(1);
+    const avgMark = evaluatedCount > 0 ? (subjectStudents.filter(s => !s.isWithHeld).reduce((acc, s) => acc + s.mark, 0) / evaluatedCount).toFixed(1) : '0.0';
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -88,13 +96,13 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                     <div style={{ background: 'rgba(40, 167, 69, 0.08)', border: '1px solid rgba(40, 167, 69, 0.3)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                         <div style={{ fontSize: '0.7rem', color: '#28a745', textTransform: 'uppercase', fontWeight: 700 }}>Pass Rate</div>
                         <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#28a745', margin: '0.2rem 0' }}>{passPercentage}%</div>
-                        <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{passCount} / {totalCount} Passed</div>
+                        <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{passCount} / {evaluatedCount} Passed</div>
                     </div>
 
                     <div style={{ background: 'rgba(220, 53, 69, 0.08)', border: '1px solid rgba(220, 53, 69, 0.3)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                         <div style={{ fontSize: '0.7rem', color: '#dc3545', textTransform: 'uppercase', fontWeight: 700 }}>Fail Rate</div>
                         <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#dc3545', margin: '0.2rem 0' }}>{failPercentage}%</div>
-                        <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{failCount} / {totalCount} Failed</div>
+                        <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{failCount} / {evaluatedCount} Failed</div>
                     </div>
 
                     {withheldCount > 0 && (
@@ -219,7 +227,7 @@ const SubjectModal: React.FC<SubjectModalProps> = ({ subjectName, students, onCl
                                                 background: s.isWithHeld ? 'rgba(124, 188, 232, 0.22)' : (s.isAbsent ? 'rgba(197, 140, 181, 0.22)' : (s.isPass ? 'rgba(40, 167, 69, 0.15)' : 'rgba(220, 53, 69, 0.15)')),
                                                 color: s.isWithHeld ? '#7CBCE8' : (s.isAbsent ? '#C58CB5' : (s.isPass ? '#28a745' : '#dc3545'))
                                             }}>
-                                                {s.isWithHeld ? 'WITHHELD' : (s.isPass ? (s.mark >= 70 ? 'FCD' : (s.mark >= 60 ? 'FC' : (s.mark >= 50 ? 'SC' : 'PASS'))) : (s.isAbsent ? 'ABSENT' : 'FAIL'))}
+                                                {s.isWithHeld ? 'WITHHELD' : (s.isPass ? (s.mark >= fcdThreshold ? 'FCD' : (s.mark >= fcThreshold ? 'FC' : (s.mark >= scThreshold ? 'SC' : 'PASS'))) : (s.isAbsent ? 'ABSENT' : 'FAIL'))}
                                             </span>
                                         </td>
                                     </tr>

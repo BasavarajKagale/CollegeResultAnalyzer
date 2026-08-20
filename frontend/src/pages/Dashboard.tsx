@@ -238,15 +238,15 @@ const Dashboard = () => {
         const isWH = s.remark === 'WITHHELD' || (s.subjectDetails && Object.values(s.subjectDetails).some((d: any) => d?.isWithHeld || ['W', 'WH', 'WITH HELD', 'WITHHELD'].includes(String(d?.result || '').toUpperCase())));
         if (isWH) withheld++;
         else if (!s.isPass) failed++;
-        else if (s.percentage >= 75) distinction++;
+        else if (s.percentage >= 70) distinction++;
         else if (s.percentage >= 60) firstClass++;
         else if (s.percentage >= 50) secondClass++;
         else passClass++;
     });
 
     const gradeLabels = [
-        `Distinction 75%+ (${distinction})`, 
-        `First Class 60-74% (${firstClass})`, 
+        `FCD Distinction 70-100% (${distinction})`, 
+        `First Class 60-69% (${firstClass})`, 
         `Second Class 50-59% (${secondClass})`, 
         `Pass Class 35-49% (${passClass})`, 
         `Failed (${failed})`
@@ -402,6 +402,9 @@ const Dashboard = () => {
                             const subWithheldCount = sub.withHeldCount || 0;
                             const passedCount = sub.totalPassCount ?? sub.passCount ?? Math.max(0, (sub.appearedCount || students.length || 0) - (sub.failCount || 0));
                             const failedCount = Math.max(0, (sub.failCount || 0) - subWithheldCount);
+                            const evaluatedSubCount = Math.max(0, (sub.appearedCount || students.length || 0) - subWithheldCount);
+                            const subPassPct = evaluatedSubCount > 0 ? ((passedCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
+                            const subFailPct = evaluatedSubCount > 0 ? ((failedCount / evaluatedSubCount) * 100).toFixed(1) : '0.0';
 
                             const subLabels = [`Passed (${passedCount})`];
                             const subData = [passedCount];
@@ -432,8 +435,6 @@ const Dashboard = () => {
                                     }
                                 ]
                             };
-
-                            const failPct = (100 - sub.passPercentage).toFixed(1);
 
                             return (
                                 <div 
@@ -467,10 +468,10 @@ const Dashboard = () => {
 
                                     <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.8rem', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                                         <span style={{ color: '#28a745', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                            <CheckCircle size={12} /> {sub.passPercentage.toFixed(1)}% Pass
+                                            <CheckCircle size={12} /> {subPassPct}% Pass
                                         </span>
                                         <span style={{ color: '#dc3545', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                            <AlertTriangle size={12} /> {failPct}% Fail
+                                            <AlertTriangle size={12} /> {subFailPct}% Fail
                                         </span>
                                         {subWithheldCount > 0 && (
                                             <span style={{ color: '#7CBCE8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>

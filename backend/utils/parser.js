@@ -449,7 +449,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
             const passThreshold = subMax * 0.35; // 35 for 100m, 70 for 200m
             const fcdThreshold = subMax * 0.70;  // 70 for 100m, 140 for 200m
             const fcThreshold = subMax * 0.60;   // 60 for 100m, 120 for 200m
-            const scThreshold = passThreshold;   // 35 for 100m, 70 for 200m
+            const scThreshold = subMax * 0.50;   // 50 for 100m, 100 for 200m
 
             const detail = detailsMap[sub] || {
                 in: 0,
@@ -481,12 +481,12 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
                     stat.failCount++;
                     failedSubjectsCount++;
                 } else {
-                    // Standard College Subject Breakdown:
-                    // FCD: >= 70%, FC: 60%-69%, SC: >35% and <60%, Pass Class: strictly == 35%
+                    // Standard Subject Breakdown:
+                    // FCD: >= 70%, FC: 60%-69%, SC: 50%-59%, Pass Class: 35%-49%
                     if (mark >= fcdThreshold) stat.fcdCount++;
                     else if (mark >= fcThreshold) stat.fcCount++;
-                    else if (mark > scThreshold) stat.scCount++;
-                    else stat.passClassCount++; // Strictly pass threshold (= 35)
+                    else if (mark >= scThreshold) stat.scCount++;
+                    else stat.passClassCount++;
                 }
             }
         });
@@ -527,11 +527,13 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
         };
     });
 
-    // Subject total pass count per subject = FCD + FC + SC + PassClass (calculated once after all students processed)
+    // Subject total pass count per subject = FCD + FC + SC + PassClass
+    // Withheld candidates are excluded from the pass percentage calculation denominator
     subjectNames.forEach(sub => {
         const stat = subjectStatsMap[sub];
         stat.totalPassCount = stat.fcdCount + stat.fcCount + stat.scCount + stat.passClassCount;
-        stat.passPercentage = stat.appearedCount > 0 ? (stat.totalPassCount / stat.appearedCount) * 100 : 0;
+        const evaluatedCount = Math.max(0, stat.appearedCount - stat.withHeldCount);
+        stat.passPercentage = evaluatedCount > 0 ? parseFloat(((stat.totalPassCount / evaluatedCount) * 100).toFixed(2)) : 0;
     });
 
     // Calculate Ranks (Sorted descending by totalMarks)
@@ -552,10 +554,11 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
         percentage: s.percentage
     }));
 
-    // Overall Batch Statistics
+    // Overall Batch Statistics (Withheld is not considered for pass or fail and excluded from passing/fail percentage)
     const totalStudents = rawStudents.length;
     const overallWithHeld = studentDocs.filter(s => s.remark === 'WITHHELD').length;
     const overallFail = studentDocs.filter(s => s.remark === 'FAIL').length;
+    const evaluatedTotal = Math.max(0, totalStudents - overallWithHeld);
 
     const overallStats = {
         totalStudents: totalStudents,
@@ -567,7 +570,7 @@ function buildResultDocument(rawStudents, subjectNames, collegeName = '') {
         failCount: overallFail,
         withHeldCount: overallWithHeld,
         passCount: overallTotalPass,
-        passPercentage: totalStudents > 0 ? parseFloat(((overallTotalPass / totalStudents) * 100).toFixed(2)) : 0
+        passPercentage: evaluatedTotal > 0 ? parseFloat(((overallTotalPass / evaluatedTotal) * 100).toFixed(2)) : 0
     };
 
     return {
